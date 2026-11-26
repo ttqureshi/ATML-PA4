@@ -1,0 +1,17 @@
+{
+  "id": "mtayyabtahir/atml-pa4-t2-attn-kv",
+  "title": "atml-pa4-t2-attn-kv",
+  "code_file": "atml-pa4-t2-attn-kv.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": ["mtayyabtahir/atml-pa4-public"],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": [],
+  "machine_shape": "NvidiaTeslaT4"
+}
