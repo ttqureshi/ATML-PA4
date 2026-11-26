@@ -14,6 +14,7 @@ separately and included in live cache bytes.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -62,8 +63,17 @@ def kl_from_reference(reference_logits: torch.Tensor, other_logits: torch.Tensor
     return float((log_p.exp() * (log_p - log_q)).sum(dim=-1).mean())
 
 
-def load_qwen(device: torch.device, local_files_only: bool = True):
+def local_files_only_for(device: torch.device) -> bool:
+    """Download only on CUDA. A CPU run must not pull the checkpoint onto a small disk."""
+    if os.environ.get("PA4_FORBID_DOWNLOAD") == "1":
+        return True
+    return device.type != "cuda"
+
+
+def load_qwen(device: torch.device, local_files_only: bool | None = None):
     """Load the instruct model in FP16. Refuses to download when ``local_files_only`` is set."""
+    if local_files_only is None:
+        local_files_only = local_files_only_for(device)
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, local_files_only=local_files_only)
@@ -553,7 +563,7 @@ def benchmark_pack_unpack(n_layers: int, h_kv: int, d_h: int, n_q: int, device: 
 def run_kv_suite(device: torch.device | None = None, limit: int | None = None) -> list[dict]:
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, tokenizer, dims = load_qwen(device, local_files_only=True)
+    model, tokenizer, dims = load_qwen(device)
     cases = load_cases()
     if limit is not None:
         cases = cases[:limit]

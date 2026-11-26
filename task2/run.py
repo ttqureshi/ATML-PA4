@@ -114,16 +114,18 @@ def stage_kv(limit: int | None, pack_benchmark: bool) -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     try:
-        _model, _tokenizer, dims = load_qwen(device, local_files_only=True)
+        records = run_kv_suite(device=device, limit=limit)
     except Exception as exc:
-        print("Qwen weights are not available locally and will not be downloaded.")
-        print(f"{type(exc).__name__}: {exc}")
-        print("GPU stage still required: kv on Qwen/Qwen2.5-1.5B-Instruct in FP16.")
-        raise SystemExit(2) from exc
-    records = run_kv_suite(device=device, limit=limit)
+        if device.type != "cuda":
+            print("Qwen weights are not available locally and will not be downloaded on CPU.")
+            print(f"{type(exc).__name__}: {exc}")
+            print("GPU stage still required: kv on Qwen/Qwen2.5-1.5B-Instruct in FP16.")
+            raise SystemExit(2) from exc
+        raise
     out = results_dir()
     write_records(records, out / "kv_records.json")
     if pack_benchmark:
+        _model, _tokenizer, dims = load_qwen(device, local_files_only=True)
         n_layers, h_kv, d_h = dims
         n_q = int(_model.config.num_attention_heads)
         bench = benchmark_pack_unpack(n_layers, h_kv, d_h, n_q, device)
