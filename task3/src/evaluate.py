@@ -1,0 +1,572 @@
+"""Held-out prefix metrics, speculative timing, and standalone answer checks.
+
+Speculative samples follow the target distribution and are not used to score
+the student. Standalone accuracy uses the answer-length caps and the extractors
+below. Latency sections use shared.timing so CUDA work is synchronized.
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import time
+from pathlib import Path
+from typing import Sequence
+
+import numpy as np
+import torch
+
+from shared.paths import REPO_ROOT
+from shared.timing import cuda_sync, time_call
+from task3.src.distill import (
+    DRAFT_MODEL,
+    TARGET_MODEL,
+    TOKEN_CHECK_PROMPTS,
+    PromptExample,
+    assert_same_token_ids,
+    load_jsonl,
+    render_chat,
+)
+from task3.src.metrics import (
+    aggregate_token_metrics,
+    aligned_disagreements,
+    analytical_speedup,
+    bootstrap_mean,
+    bootstrap_throughput,
+    break_even_acceptance,
+    breakdown_by_domain_and_bin,
+    cost_ratios,
+    position_bin,
+    prefix_alignment,
+    requests_to_amortize,
+)
+from task3.src.speculative import (
+    KVCacheState,
+    SpeculativeDecoder,
+    cache_length,
+    logits_to_probs,
+    sample_categorical,
+)
+
+SPEED_MAX_NEW = 64
+MATH_ANSWER_MAX_NEW = 512
+SHORT_ANSWER_MAX_NEW = 32
+DIAGNOSTIC_MATH_PROMPTS = 24
+DIAGNOSTIC_MAX_NEW = 64
+GAMMAS = (2, 4)
+PAIRED_REPETITIONS = 2
+RESULTS_DIR = REPO_ROOT / "results" / "task3"
+CHECKPOINT_DIR = REPO_ROOT / "checkpoints" / "task3"
+
+_NUMBER = __import__("re").compile(r"-?\d[\d,]*(?:\.\d+)?")
+_GSM_MARK = __import__("re").compile(r"####\s*(-?\d[\d,]*(?:\.\d+)?)")
+
+
+def results_dir() -> Path:
+    return RESULTS_DIR
+
+
+def checkpoint_dir() -> Path:
+    return CHECKPOINT_DIR
+
+
+def repetition_order(repetition: int) -> tuple[str, str]:
+    """Counterbalance speculative and target-only runs across paired repetitions."""
+    if repetition % 2 == 0:
+        return ("target_only", "speculative")
+    return ("speculative", "target_only")
+
+
+def domain_of(prompt_id: str, stored: str | None = None) -> str:
+    if stored in ("math", "familiar", "shifted"):
+        return stored
+    if prompt_id.startswith("GSM8K"):
+        return "math"
+    if "familiar" in prompt_id:
+        return "familiar"
+    if "shifted" in prompt_id:
+        return "shifted"
+    if stored == "short":
+        raise ValueError(f"short prompt {prompt_id} does not say familiar or shifted")
+    raise ValueError(f"cannot assign a domain to {prompt_id}")
+
+
+def extract_gsm8k_number(text: str | None) -> str | None:
+    """Final number, preferring a GSM8K `####` marker and otherwise the last number."""
+    if text is None or not str(text).strip():
+        return None
+    marked = _GSM_MARK.findall(text)
+    raw = marked[-1] if marked else None
+    if raw is None:
+        found = _NUMBER.findall(text)
+        if not found:
+            return None
+        raw = found[-1]
+    return raw.replace(",", "")
+
+
+def numbers_equal(predicted: str | None, gold: str | None) -> bool:
+    if predicted is None or gold is None:
+        return False
+    try:
+        left = float(predicted)
+        right = float(gold)
+    except ValueError:
+        return False
+    return abs(left - right) <= 1e-6 * max(1.0, abs(right))
+
+
+def extract_short_form(text: str | None) -> str | None:
+    """First non-empty line, with a leading label and a trailing period removed."""
+    if text is None or not str(text).strip():
+        return None
+    line = str(text).strip().splitlines()[0].strip().strip("`\"' ")
+    if line.lower().startswith("answer:"):
+        line = line.split(":", 1)[1].strip()
+    line = line.rstrip(".").strip()
+    return line or None
+
+
+def short_form_match(predicted: str | None, gold: str) -> bool:
+    if predicted is None:
+        return False
+    return predicted.casefold() == gold.strip().casefold()
+
+
+def score_standalone(domain: str, generated_text: str | None, gold: str, *, length_capped: bool) -> dict:
+    """Score a student generation. Do not pass speculative target samples here."""
+    if domain == "math":
+        predicted = extract_gsm8k_number(generated_text)
+        gold_number = extract_gsm8k_number(gold)
+        correct = numbers_equal(predicted, gold_number)
+    else:
+        predicted = extract_short_form(generated_text)
+        correct = short_form_match(predicted, gold)
+    return {
+        "prediction": predicted,
+        "correct": correct,
+        "unextractable": predicted is None,
+        "truncated": length_capped,
+    }
+
+
+def answer_cap(domain: str) -> int:
+    if domain == "math":
+        return MATH_ANSWER_MAX_NEW
+    return SHORT_ANSWER_MAX_NEW
+
+
+def diagnostic_math_prompts(examples: Sequence[PromptExample], count: int = DIAGNOSTIC_MATH_PROMPTS) -> list[PromptExample]:
+    math_examples = [example for example in examples if example.domain == "math"]
+    if len(math_examples) < count:
+        raise RuntimeError(f"need {count} math prompts, found {len(math_examples)}")
+    return math_examples[:count]
+
+
+def split_prefill_max_abs(model, token_ids: Sequence[int], split: int) -> float:
+    """Max absolute logit gap between a full forward and a two-piece prefill."""
+    if split <= 0 or split >= len(token_ids):
+        raise ValueError("split must lie strictly inside the token sequence")
+    device = next(model.parameters()).device
+    ids = torch.tensor([list(token_ids)], dtype=torch.long, device=device)
+    with torch.inference_mode():
+        full = model(input_ids=ids, use_cache=False).logits
+        first = model(input_ids=ids[:, :split], use_cache=True)
+        position = torch.arange(split, ids.shape[1], device=device)
+        second = model(
+            input_ids=ids[:, split:],
+            past_key_values=first.past_key_values,
+            use_cache=True,
+            cache_position=position,
+        )
+        joined = torch.cat([first.logits, second.logits], dim=1)
+    return float((full.float() - joined.float()).abs().max().cpu())
+
+
+def cache_matches_full_forward(target_model, draft_model, token_ids: Sequence[int], eos_id: int | None) -> dict:
+    """Run a short speculative generation and compare the cache with a full forward."""
+    decoder = SpeculativeDecoder(target_model, draft_model, np.random.default_rng(6304))
+    decoder.prefill(token_ids)
+    result = decoder.generate(gamma=4, max_new_tokens=8, eos_id=eos_id)
+    expected = list(token_ids) + list(result.tokens)
+    length_ok = (
+        decoder.target.token_ids == expected
+        and decoder.draft.token_ids == expected
+        and cache_length(decoder.target.cache) == len(expected)
+        and cache_length(decoder.draft.cache) == len(expected)
+    )
+    device = next(target_model.parameters()).device
+    ids = torch.tensor([expected], dtype=torch.long, device=device)
+    with torch.inference_mode():
+        full = target_model(input_ids=ids, use_cache=False).logits[0, -1].float()
+    cached = decoder.target.next_logits.float()
+    error = float((full - cached).abs().max().cpu())
+    return {
+        "length_ok": length_ok,
+        "next_logit_max_abs": error,
+        "generated_tokens": len(result.tokens),
+        "cache_length": len(expected),
+    }
+
+
+def _sync_elapsed(fn) -> float:
+    cuda_sync()
+    start = time.perf_counter()
+    fn()
+    cuda_sync()
+    return time.perf_counter() - start
+
+
+def isolated_forward_seconds(model, prompt_len: int, n_tokens: int, *, warmup: int = 2, repeats: int = 10) -> float:
+    """Mean seconds for one cached forward of `n_tokens`, cropped back afterwards.
+
+    The crop keeps the measured length fixed across `time_call` repetitions.
+    """
+    if prompt_len < 1 or n_tokens < 1:
+        raise ValueError("prompt_len and n_tokens must be positive")
+    device = next(model.parameters()).device
+    vocab = int(getattr(model.config, "vocab_size", 1024))
+    prefix = torch.randint(0, min(vocab, 1000), (1, prompt_len), device=device)
+    follow = torch.randint(0, min(vocab, 1000), (1, n_tokens), device=device)
+    with torch.inference_mode():
+        past_box = [model(input_ids=prefix, use_cache=True).past_key_values]
+
+        def step() -> None:
+            output = model(input_ids=follow, past_key_values=past_box[0], use_cache=True)
+            past_box[0] = output.past_key_values
+            past_box[0].crop(prompt_len)
+
+        samples = time_call(step, warmup=warmup, repeats=repeats)
+    return float(np.mean(samples))
+
+
+def summarize_speculative(result, elapsed_s: float, peak_bytes: int) -> dict:
+    proposed = sum(item.n_proposed for item in result.rounds)
+    examined = sum(item.n_examined for item in result.rounds)
+    accepted = sum(item.n_accepted for item in result.rounds)
+    emitted = len(result.tokens)
+    emitted_per_round = [item.n_emitted for item in result.rounds]
+    draft_s = sum(item.draft_proposal_s for item in result.timings)
+    verify_s = sum(item.target_verification_s for item in result.timings)
+    decide_s = sum(item.acceptance_residual_s for item in result.timings)
+    rollback_s = sum(item.cache_rollback_s for item in result.timings)
+    accounted = result.prefill_s + draft_s + verify_s + decide_s + rollback_s
+    host_s = max(0.0, elapsed_s - accounted)
+    rounds = len(result.rounds)
+    extra_draft_forwards = sum(1 for item in result.rounds if item.bonus_token is not None or item.residual_token is not None)
+    return {
+        "output_tokens": emitted,
+        "accepted_over_examined": None if examined == 0 else accepted / examined,
+        "accepted_over_proposed": None if proposed == 0 else accepted / proposed,
+        "mean_emitted_per_round": None if rounds == 0 else float(np.mean(emitted_per_round)),
+        "target_passes": rounds,
+        "target_passes_per_output_token": None if emitted == 0 else rounds / emitted,
+        "draft_proposal_forwards": proposed,
+        "draft_cache_forwards": extra_draft_forwards,
+        "tokens_per_second": None if elapsed_s <= 0 else emitted / elapsed_s,
+        "elapsed_s": elapsed_s,
+        "prefill_s": result.prefill_s,
+        "draft_proposal_s": draft_s,
+        "target_verification_s": verify_s,
+        "acceptance_residual_s": decide_s,
+        "cache_rollback_s": rollback_s,
+        "host_overhead_s": host_s,
+        "hit_eos": result.hit_eos,
+        "length_capped": result.length_capped,
+        "peak_memory_bytes": peak_bytes,
+    }
+
+
+def timed_target_only(model, prompt_ids: Sequence[int], *, max_new_tokens: int, eos_id: int | None, rng, ignore_eos: bool) -> dict:
+    stop_id = None if ignore_eos else eos_id
+    state = KVCacheState(model)
+    cuda_sync()
+    start = time.perf_counter()
+    with torch.inference_mode():
+        state.prefill(prompt_ids)
+        cuda_sync()
+        prefill_s = time.perf_counter() - start
+        decode_start = time.perf_counter()
+        tokens: list[int] = []
+        hit_eos = False
+        for _ in range(max_new_tokens):
+            token = sample_categorical(logits_to_probs(state.next_logits), rng)
+            tokens.append(token)
+            state.forward_tokens([token])
+            if stop_id is not None and token == stop_id:
+                hit_eos = True
+                break
+        cuda_sync()
+        decode_s = time.perf_counter() - decode_start
+    elapsed = prefill_s + decode_s
+    return {
+        "tokens": tokens,
+        "output_tokens": len(tokens),
+        "hit_eos": hit_eos,
+        "length_capped": len(tokens) >= max_new_tokens and not hit_eos,
+        "prefill_s": prefill_s,
+        "decode_s": decode_s,
+        "elapsed_s": elapsed,
+        "tokens_per_second": None if elapsed <= 0 else len(tokens) / elapsed,
+        "target_passes": len(tokens),
+        "target_passes_per_output_token": 1.0 if tokens else None,
+    }
+
+
+def benchmark_prompt(
+    decoder: SpeculativeDecoder,
+    target_model,
+    prompt_ids: Sequence[int],
+    *,
+    gamma: int,
+    max_new_tokens: int,
+    eos_id: int | None,
+    seed: int,
+    repetition: int,
+    ignore_eos: bool = False,
+) -> dict:
+    """One paired repetition. Order alternates so the target-only run stays adjacent."""
+    rows = {}
+    for kind in repetition_order(repetition):
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+        if kind == "target_only":
+            rows[kind] = timed_target_only(
+                target_model,
+                prompt_ids,
+                max_new_tokens=max_new_tokens,
+                eos_id=eos_id,
+                rng=np.random.default_rng(seed + 3),
+                ignore_eos=ignore_eos,
+            )
+        else:
+            decoder.rng = np.random.default_rng(seed)
+            cuda_sync()
+            start = time.perf_counter()
+            with torch.inference_mode():
+                decoder.prefill(prompt_ids)
+                result = decoder.generate(
+                    gamma=gamma,
+                    max_new_tokens=max_new_tokens,
+                    eos_id=eos_id,
+                    ignore_eos=ignore_eos,
+                )
+            cuda_sync()
+            elapsed = time.perf_counter() - start
+            peak = int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else 0
+            summary = summarize_speculative(result, elapsed, peak)
+            summary["tokens"] = list(result.tokens)
+            rows[kind] = summary
+        if "peak_memory_bytes" not in rows[kind] and torch.cuda.is_available():
+            rows[kind]["peak_memory_bytes"] = int(torch.cuda.max_memory_allocated())
+    rows["order"] = list(repetition_order(repetition))
+    rows["gamma"] = gamma
+    rows["seed"] = seed
+    rows["repetition"] = repetition
+    return rows
+
+
+def estimate_speed_model(draft_model, target_model, gamma: int, prompt_lengths: Sequence[int] = (32, 128)) -> dict:
+    """Isolated c and v_gamma, then the analytical speedup at a placeholder alpha.
+
+    The caller replaces alpha with the measured acceptance before reporting S_hat.
+    """
+    draft_steps = [isolated_forward_seconds(draft_model, length, 1) for length in prompt_lengths]
+    target_steps = [isolated_forward_seconds(target_model, length, 1) for length in prompt_lengths]
+    verifies = [isolated_forward_seconds(target_model, length, gamma) for length in prompt_lengths]
+    ratios = cost_ratios(float(np.mean(draft_steps)), float(np.mean(target_steps)), float(np.mean(verifies)))
+    return {
+        "gamma": gamma,
+        "prompt_lengths": list(prompt_lengths),
+        "draft_step_s": draft_steps,
+        "target_step_s": target_steps,
+        "verify_s": verifies,
+        **ratios,
+    }
+
+
+def project_speedup(measured_acceptance: float, gamma: int, draft_over_target: float, verify_over_target: float) -> dict:
+    predicted = analytical_speedup(measured_acceptance, gamma, draft_over_target, verify_over_target)
+    return {
+        "alpha": measured_acceptance,
+        "c": draft_over_target,
+        "v_gamma": verify_over_target,
+        "predicted_speedup": predicted,
+        "break_even_alpha": break_even_acceptance(gamma, draft_over_target, verify_over_target),
+    }
+
+
+def deployment_break_even(train_seconds: float, merge_seconds: float, target_seconds: float, speculative_seconds: float) -> dict:
+    upfront = train_seconds + merge_seconds
+    saving = target_seconds - speculative_seconds
+    return {
+        "upfront_seconds": upfront,
+        "seconds_saved_per_request": saving,
+        "requests_to_amortize": requests_to_amortize(upfront, saving),
+    }
+
+
+def _prompt_seed(base_seed: int, prompt_index: int, repetition: int) -> int:
+    return int(base_seed + 10007 * prompt_index + 17 * repetition)
+
+
+def bank_positions(response_len: int, prompt_id: str, bank: str) -> list[int]:
+    """Same position budget as the course prefix-bank script, under this bank's name."""
+    rng = random.Random(f"PA4-banks-v1:6304:{prompt_id}:{bank}")
+    chosen: list[int] = []
+    for low, high, count in ((1, 16, 8), (17, 32, 8), (33, 64, 16), (65, 192, 16)):
+        candidates = list(range(low, min(high, response_len) + 1))
+        chosen.extend(sorted(rng.sample(candidates, min(count, len(candidates)))))
+    return chosen
+
+
+def prefix_rows_from_generation(
+    prompt_id: str,
+    prompt: str,
+    domain: str,
+    token_ids: Sequence[int],
+    bank: str,
+    *,
+    producer: str,
+) -> list[dict]:
+    rows = []
+    for position in bank_positions(len(token_ids), prompt_id, bank):
+        rows.append(
+            {
+                "prompt_id": prompt_id,
+                "domain": domain if domain in ("math", "familiar", "shifted") else domain_of(prompt_id),
+                "bank": bank,
+                "position": position,
+                "prompt": prompt,
+                "response_prefix_token_ids": list(token_ids[: position - 1]),
+                "producer": producer,
+            }
+        )
+    return rows
+
+
+def load_prefix_bank(path: Path) -> list[dict]:
+    if not path.is_file():
+        raise FileNotFoundError(f"missing prefix bank {path}. Generate it on CUDA; unit tests do not download it.")
+    rows = []
+    for record in load_jsonl(path):
+        prompt_id = str(record["prompt_id"])
+        stored = record.get("domain")
+        rows.append(
+            {
+                "prompt_id": prompt_id,
+                "domain": domain_of(prompt_id, stored if stored in ("math", "familiar", "shifted") else None),
+                "bank": record["bank"],
+                "position": int(record["position"]),
+                "prompt": record["prompt"],
+                "response_prefix_token_ids": list(record["response_prefix_token_ids"]),
+                "producer": record.get("producer", record["bank"]),
+            }
+        )
+    return rows
+
+
+def alignment_row(teacher_probs, draft_probs, meta: dict) -> dict:
+    measured = prefix_alignment(teacher_probs, draft_probs)
+    row = dict(meta)
+    row.update(measured)
+    row["bin"] = position_bin(int(meta["position"]))
+    row["teacher_token"] = int(np.argmax(np.asarray(teacher_probs)))
+    row["draft_token"] = int(np.argmax(np.asarray(draft_probs)))
+    return row
+
+
+def next_distribution(model, token_ids: Sequence[int]) -> np.ndarray:
+    state = KVCacheState(model)
+    with torch.inference_mode():
+        state.prefill(token_ids)
+        return logits_to_probs(state.next_logits)
+
+
+def evaluate_draft_on_bank(teacher, draft, tokenizer, rows: Sequence[dict], draft_name: str) -> list[dict]:
+    """Matched prefixes only. Teacher probabilities are recomputed per row."""
+    scored = []
+    for record in rows:
+        prompt_ids = render_chat(tokenizer, record["prompt"])
+        full = prompt_ids + list(record["response_prefix_token_ids"])
+        if len(full) < 1:
+            continue
+        teacher_probs = next_distribution(teacher, full)
+        draft_probs = next_distribution(draft, full)
+        meta = dict(record)
+        meta["draft"] = draft_name
+        scored.append(alignment_row(teacher_probs, draft_probs, meta))
+    return scored
+
+
+def summarize_alignment(rows: Sequence[dict]) -> dict:
+    return {
+        "overall": aggregate_token_metrics(list(rows)),
+        "by_domain_and_bin": breakdown_by_domain_and_bin(list(rows)),
+        "disagreements": aligned_disagreements(list(rows)),
+        "n_prefixes": len(rows),
+    }
+
+
+def paired_bootstrap_report(per_prompt: Sequence[dict], *, seed: int) -> dict:
+    spec = [float(row["speculative_tps"]) for row in per_prompt]
+    target = [float(row["target_tps"]) for row in per_prompt]
+    acceptance = [float(row["acceptance"]) for row in per_prompt]
+    return {
+        "throughput_spec_minus_target": bootstrap_throughput(spec, target, seed=seed),
+        "acceptance_mean": bootstrap_mean(acceptance, seed=seed),
+    }
+
+
+def decode_text(tokenizer, token_ids: Sequence[int]) -> str:
+    return tokenizer.decode(list(token_ids), skip_special_tokens=True)
+
+
+def run_smoke() -> dict:
+    """Load both instruct models, check token ids, split-prefill, and cache length.
+
+    Refuses without CUDA before any weight download.
+    """
+    from task3.src.distill import _require_cuda, load_frozen_causal
+
+    _require_cuda("smoke")
+    target, target_tokenizer = load_frozen_causal(TARGET_MODEL)
+    draft, draft_tokenizer = load_frozen_causal(DRAFT_MODEL)
+    assert_same_token_ids(target_tokenizer, draft_tokenizer)
+    probe = render_chat(target_tokenizer, "What is 2 + 2? Reply with the integer.")
+    # A short repeated probe is enough to split a prefill without a long context.
+    token_ids = (probe * 4)[:48]
+    split_error = split_prefill_max_abs(target, token_ids, split=17)
+    eos_id = None if target_tokenizer.eos_token_id is None else int(target_tokenizer.eos_token_id)
+    cache_report = cache_matches_full_forward(target, draft, probe, eos_id)
+    report = {
+        "split_prefill_max_abs": split_error,
+        "cache": cache_report,
+        "token_id_prompts": list(TOKEN_CHECK_PROMPTS),
+        "target": TARGET_MODEL,
+        "draft": DRAFT_MODEL,
+    }
+    _dump(results_dir() / "smoke.json", report)
+    if split_error > 5e-2 or not cache_report["length_ok"] or cache_report["next_logit_max_abs"] > 5e-1:
+        raise RuntimeError(f"smoke check failed: {report}")
+    return report
+
+
+def _dump(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n", encoding="utf-8")
+
+
+def _json_default(value):
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"cannot encode {type(value)!r}")
+
+
+def load_result(name: str) -> dict:
+    path = results_dir() / name
+    if not path.is_file():
+        raise FileNotFoundError(f"missing {path}. Run the GPU stage that writes it before analyze.")
+    return json.loads(path.read_text(encoding="utf-8"))

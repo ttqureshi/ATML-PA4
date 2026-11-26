@@ -1,0 +1,318 @@
+{
+  "seed": 6304,
+  "n_sequences": 100000,
+  "gamma": 2,
+  "length": 3,
+  "df": 26,
+  "null": "target ancestral joint, which is the target-only law",
+  "min_expected_count": 1360.0,
+  "correct_positive_residual": {
+    "statistic": 18.609351950881383,
+    "p_value": 0.8524926258915911,
+    "rejected_at_0.01": false
+  },
+  "wrong_residual_from_target": {
+    "statistic": 17159.47583862591,
+    "p_value": 0.0,
+    "rejected_at_0.01": true
+  },
+  "joint": [
+    {
+      "sequence": [
+        0,
+        0,
+        0
+      ],
+      "probability": 0.085,
+      "expected": 8500.0,
+      "observed_correct": 8654,
+      "observed_wrong": 3882
+    },
+    {
+      "sequence": [
+        0,
+        0,
+        1
+      ],
+      "probability": 0.051000000000000004,
+      "expected": 5100.0,
+      "observed_correct": 5042,
+      "observed_wrong": 3068
+    },
+    {
+      "sequence": [
+        0,
+        0,
+        2
+      ],
+      "probability": 0.034,
+      "expected": 3400.0000000000005,
+      "observed_correct": 3418,
+      "observed_wrong": 2849
+    },
+    {
+      "sequence": [
+        0,
+        1,
+        0
+      ],
+      "probability": 0.025500000000000002,
+      "expected": 2550.0,
+      "observed_correct": 2576,
+      "observed_wrong": 2716
+    },
+    {
+      "sequence": [
+        0,
+        1,
+        1
+      ],
+      "probability": 0.0459,
+      "expected": 4590.0,
+      "observed_correct": 4572,
+      "observed_wrong": 3167
+    },
+    {
+      "sequence": [
+        0,
+        1,
+        2
+      ],
+      "probability": 0.030600000000000002,
+      "expected": 3060.0,
+      "observed_correct": 3018,
+      "observed_wrong": 2346
+    },
+    {
+      "sequence": [
+        0,
+        2,
+        0
+      ],
+      "probability": 0.0204,
+      "expected": 2040.0000000000002,
+      "observed_correct": 2078,
+      "observed_wrong": 2402
+    },
+    {
+      "sequence": [
+        0,
+        2,
+        1
+      ],
+      "probability": 0.013600000000000001,
+      "expected": 1360.0,
+      "observed_correct": 1396,
+      "observed_wrong": 2168
+    },
+    {
+      "sequence": [
+        0,
+        2,
+        2
+      ],
+      "probability": 0.034,
+      "expected": 3400.0000000000005,
+      "observed_correct": 3414,
+      "observed_wrong": 3496
+    },
+    {
+      "sequence": [
+        1,
+        0,
+        0
+      ],
+      "probability": 0.04125,
+      "expected": 4125.0,
+      "observed_correct": 4071,
+      "observed_wrong": 4739
+    },
+    {
+      "sequence": [
+        1,
+        0,
+        1
+      ],
+      "probability": 0.02475,
+      "expected": 2475.0,
+      "observed_correct": 2470,
+      "observed_wrong": 3443
+    },
+    {
+      "sequence": [
+        1,
+        0,
+        2
+      ],
+      "probability": 0.0165,
+      "expected": 1650.0,
+      "observed_correct": 1638,
+      "observed_wrong": 2918
+    },
+    {
+      "sequence": [
+        1,
+        1,
+        0
+      ],
+      "probability": 0.037125000000000005,
+      "expected": 3712.5000000000005,
+      "observed_correct": 3778,
+      "observed_wrong": 3589
+    },
+    {
+      "sequence": [
+        1,
+        1,
+        1
+      ],
+      "probability": 0.06682500000000001,
+      "expected": 6682.500000000001,
+      "observed_correct": 6630,
+      "observed_wrong": 3953
+    },
+    {
+      "sequence": [
+        1,
+        1,
+        2
+      ],
+      "probability": 0.044550000000000006,
+      "expected": 4455.000000000001,
+      "observed_correct": 4380,
+      "observed_wrong": 3078
+    },
+    {
+      "sequence": [
+        1,
+        2,
+        0
+      ],
+      "probability": 0.0297,
+      "expected": 2970.0,
+      "observed_correct": 2955,
+      "observed_wrong": 2633
+    },
+    {
+      "sequence": [
+        1,
+        2,
+        1
+      ],
+      "probability": 0.0198,
+      "expected": 1980.0000000000002,
+      "observed_correct": 1933,
+      "observed_wrong": 2298
+    },
+    {
+      "sequence": [
+        1,
+        2,
+        2
+      ],
+      "probability": 0.0495,
+      "expected": 4950.0,
+      "observed_correct": 4960,
+      "observed_wrong": 3740
+    },
+    {
+      "sequence": [
+        2,
+        0,
+        0
+      ],
+      "probability": 0.0495,
+      "expected": 4950.0,
+      "observed_correct": 4919,
+      "observed_wrong": 5509
+    },
+    {
+      "sequence": [
+        2,
+        0,
+        1
+      ],
+      "probability": 0.0297,
+      "expected": 2970.0,
+      "observed_correct": 2894,
+      "observed_wrong": 4115
+    },
+    {
+      "sequence": [
+        2,
+        0,
+        2
+      ],
+      "probability": 0.0198,
+      "expected": 1980.0000000000002,
+      "observed_correct": 1996,
+      "observed_wrong": 3471
+    },
+    {
+      "sequence": [
+        2,
+        1,
+        0
+      ],
+      "probability": 0.0165,
+      "expected": 1650.0,
+      "observed_correct": 1727,
+      "observed_wrong": 4058
+    },
+    {
+      "sequence": [
+        2,
+        1,
+        1
+      ],
+      "probability": 0.0297,
+      "expected": 2970.0,
+      "observed_correct": 2987,
+      "observed_wrong": 5199
+    },
+    {
+      "sequence": [
+        2,
+        1,
+        2
+      ],
+      "probability": 0.0198,
+      "expected": 1980.0000000000002,
+      "observed_correct": 1973,
+      "observed_wrong": 3762
+    },
+    {
+      "sequence": [
+        2,
+        2,
+        0
+      ],
+      "probability": 0.0495,
+      "expected": 4950.0,
+      "observed_correct": 4883,
+      "observed_wrong": 5141
+    },
+    {
+      "sequence": [
+        2,
+        2,
+        1
+      ],
+      "probability": 0.033,
+      "expected": 3300.0,
+      "observed_correct": 3333,
+      "observed_wrong": 4826
+    },
+    {
+      "sequence": [
+        2,
+        2,
+        2
+      ],
+      "probability": 0.0825,
+      "expected": 8250.0,
+      "observed_correct": 8305,
+      "observed_wrong": 7434
+    }
+  ]
+}
