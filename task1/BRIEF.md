@@ -21,7 +21,7 @@ Implement this task only. Do not edit `task2/`, `task3/`, or `shared/`.
 **P3 nonuniform Wanda.** Ranking rule stays Wanda. Allocation unit is one eligible projection.
 
 - Sensitivity is the calibration output distortion of that projection: relative MSE `||(W - W_s) X||^2 / ||W X||^2` when the projection is Wanda-pruned at the target global sparsity. This is the lecture distortion proxy. Compute it on the 128 calibration sequences only.
-- Allocation: `s_l ∝ sensitivity_l ** tau`, clipped to `[0.10, 0.85]`, then integer-weight repair so the total number of zeroed eligible weights equals the uniform P1/P2 budget at that sparsity. Repair by moving one weight at a time on the projection whose sparsity is farthest inside its clip.
+- Allocation: `s_l ∝ 1 / (sensitivity_l + 1e-12) ** tau`, clipped to `[0.10, 0.85]`, then integer-weight repair so the total number of zeroed eligible weights equals the uniform P1/P2 budget at that sparsity. A projection that distorts more is pruned less. Repair by moving one weight at a time on the projection whose sparsity is farthest inside its clip. The Q3 ladder tries the next projection when the most sensitive one's next bit step does not fit.
 - Choose `tau` from `{0.5, 1.0, 2.0}` by mean token NLL of the compressed model on the 32 development sequences only. Freeze the winner before any test file is opened. Save all three development scores.
 - Run at global sparsity 50% and 75%.
 

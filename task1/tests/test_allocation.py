@@ -17,10 +17,12 @@ class AllocationTests(unittest.TestCase):
         budget = uniform_zero_budget([(10, 10), (10, 10), (10, 10)], 0.5)
         self.assertEqual(budget, 150)
         zeros = allocate_p3_zeros(sizes, [1.0, 100.0, 0.01], sparsity=0.5, tau=2.0)
-        # Clipping puts b at 0.85 and a, c at 0.10 (105 zeros). The 45-zero
-        # deficit alternates between a and c, the two projections farthest
-        # from the upper clip, with index ties going to a first.
-        self.assertEqual(zeros, [33, 85, 32])
+        # b distorts the most, so the inverse rule clips it to 0.10 sparsity.
+        # c distorts the least and is clipped to 0.85. The 45-zero deficit is
+        # then shared by a and b, the two projections farthest from the upper
+        # clip, with index ties going to a first.
+        self.assertEqual(zeros, [33, 32, 85])
+        self.assertLess(zeros[1], zeros[2])
         self.assertEqual(sum(zeros), budget)
         for count in zeros:
             self.assertTrue(fraction_in_clip(count, 100))
@@ -43,6 +45,18 @@ class AllocationTests(unittest.TestCase):
         blocked = allocate_q3_bits(names, [1.0, 5.0, 2.0], byte_fn, budget_bytes=60)
         self.assertEqual(blocked.bits, {"a": 2, "b": 2, "c": 2})
         self.assertTrue(blocked.within_budget)
+
+    def test_q3_uses_a_smaller_projection_when_the_top_step_does_not_fit(self) -> None:
+        names = ["a", "b"]
+
+        def byte_fn(bits: dict[str, int]) -> int:
+            return sum(bits[name] * 10 for name in names)
+
+        # After b reaches 4 bits the next legal step is 8, which passes 70.
+        # a can still move 2 → 3 and land on the budget.
+        allocation = allocate_q3_bits(names, [1.0, 10.0], byte_fn, budget_bytes=70)
+        self.assertEqual(allocation.bits, {"a": 3, "b": 4})
+        self.assertEqual(allocation.final_bytes, 70)
 
     def test_compensation_folds_only_matching_shared_inputs(self) -> None:
         scale = np.array([1.0, 2.0, 3.0])

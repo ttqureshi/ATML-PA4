@@ -1,15 +1,18 @@
 """P3 sparsity repair and the Q3 bit ladder.
 
-P3 sets ``s_l`` proportional to ``sensitivity_l ** tau``, clips each fraction
-to [0.10, 0.85], then adds or removes one weight at a time until the total
-number of zeros equals the uniform per-row budget. The weight moves on the
-projection whose current fraction is farthest from the clip boundary in the
-direction of the move. Equal distance keeps the earlier projection.
+P3 sets ``s_l`` proportional to ``1 / (sensitivity_l + eps) ** tau``. A
+projection whose isolated prune distorts the output more keeps more of its
+weights. Fractions are clipped to [0.10, 0.85], then one weight is added or
+removed at a time until the total number of zeros equals the uniform per-row
+budget. The weight moves on the projection whose current fraction is farthest
+from the clip boundary in the direction of the move. Equal distance keeps the
+earlier projection.
 
 Q3 starts every projection at 2 bits. Each step promotes the most sensitive
-projection that is not already at 8 bits, along 2 → 3 → 4 → 8. If that one
-promotion would exceed the packed-byte budget, the search stops. It does not
-skip ahead to a less sensitive projection.
+projection that is not already at 8 bits, along 2 → 3 → 4 → 8. If that
+promotion would exceed the packed-byte budget, that projection is left where
+it is and the next most sensitive projection is tried. The search stops when
+no remaining promotion fits.
 """
 
 from __future__ import annotations
@@ -41,7 +44,9 @@ def _proportional_fractions(
     target_zeros: int,
     tau: float,
 ) -> list[float]:
-    raw = [float(value) ** float(tau) for value in sensitivities]
+    # High output distortion keeps a lower sparsity. eps keeps a zero-error
+    # projection finite and makes it the first place zeros are spent.
+    raw = [(float(value) + 1e-12) ** (-float(tau)) for value in sensitivities]
     weighted = sum(raw[i] * sizes[i].numel for i in range(len(sizes)))
     if weighted == 0.0:
         # No measured distortion anywhere: start from the global rate. The
@@ -160,6 +165,7 @@ def allocate_q3_bits(
             budget_bytes=int(budget_bytes),
         )
     ranked = [name for _, name in sorted(zip(sensitivities, names), key=lambda item: (-item[0], item[1]))]
+    blocked: set[str] = set()
     guard = 0
     limit = len(names) * len(Q3_BITS) + 1
     while True:
@@ -168,6 +174,8 @@ def allocate_q3_bits(
             raise InfeasibleAllocation("Q3 upgrade did not terminate")
         candidate = None
         for name in ranked:
+            if name in blocked:
+                continue
             if next_q3_bit(bits[name]) is not None:
                 candidate = name
                 break
@@ -179,7 +187,8 @@ def allocate_q3_bits(
         trial[candidate] = promoted
         trial_bytes = int(byte_fn(trial))
         if trial_bytes > budget_bytes:
-            break
+            blocked.add(candidate)
+            continue
         bits = trial
         steps.append({"projection": candidate, "bits": promoted, "packed_bytes": trial_bytes})
     final_bytes = int(byte_fn(bits))
