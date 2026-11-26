@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+*.log
+
+# Course data, models, and run artifacts stay off git.
+# Small machine-readable tables may be copied into task*/results_export/ later.
+external/
+atml-pa4-datasets/
+data/
+runs/
+results/
+checkpoints/
+*.pt
+*.bin
+*.safetensors
+*.gguf
+wandb/
+outputs/
+
+# Local worktrees
+.worktrees/
