@@ -31,6 +31,7 @@ from task2.src.schedule import (
     GRAD_CLIP,
     PEAK_LR,
     TOTAL_UPDATES,
+    WARMUP_UPDATES,
     WEIGHT_DECAY,
     learning_rate,
 )
@@ -193,7 +194,8 @@ def train_job(
     running_steps = 0
     model.train()
     for update_index in range(updates):
-        lr = learning_rate(update_index, total=updates)
+        warmup = min(WARMUP_UPDATES, updates)
+        lr = learning_rate(update_index, total=updates, warmup=warmup)
         for group in optimizer.param_groups:
             group["lr"] = lr
         examples = _train_batch(generator, k, regime, update_index * batch_size, batch_size)

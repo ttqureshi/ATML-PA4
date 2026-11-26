@@ -174,6 +174,12 @@ def suffix_attention_scores(
     n_kv = key.shape[0]
     if n_q % n_kv != 0:
         raise ValueError("query heads must be divisible by KV heads")
+    question = query_positions >= question_start
+    if int(question.sum()) == 0:
+        raise ValueError("question suffix is empty")
+    # Score only the suffix. A full query-key matrix at 4,096 tokens does not fit on a T4.
+    query = query[:, question, :]
+    query_positions = query_positions[question]
     groups = n_q // n_kv
     query_f = query.float().reshape(n_kv, groups, query.shape[1], width)
     key_f = key.float()
@@ -181,9 +187,5 @@ def suffix_attention_scores(
     query_ids = query_positions.view(1, 1, -1, 1)
     key_ids = key_positions.view(1, 1, 1, -1)
     scores = scores.masked_fill(key_ids > query_ids, float("-inf"))
-    question = query_positions >= question_start
-    if int(question.sum()) == 0:
-        raise ValueError("question suffix is empty")
-    scores = scores[:, :, question, :]
     weights = torch.softmax(scores, dim=-1)
     return weights.mean(dim=(1, 2)).mean(dim=0)

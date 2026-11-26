@@ -216,13 +216,14 @@ def gpu_kv_bytes(cache) -> int:
 
 def _forward_token(model, editor: RotaryCacheEditor, token: torch.Tensor) -> torch.Tensor:
     position_ids, cache_position = editor.decode_inputs(token.device)
-    output = model(
-        input_ids=token,
-        past_key_values=editor.cache,
-        position_ids=position_ids,
-        cache_position=cache_position,
-        use_cache=True,
-    )
+    with torch.inference_mode():
+        output = model(
+            input_ids=token,
+            past_key_values=editor.cache,
+            position_ids=position_ids,
+            cache_position=cache_position,
+            use_cache=True,
+        )
     editor.note_appended()
     return output.logits[:, -1, :]
 
@@ -399,7 +400,8 @@ def evaluate_case(model, tokenizer, row: dict, dims, device: torch.device) -> li
         torch.cuda.reset_peak_memory_stats()
     started = time.perf_counter()
     cuda_sync()
-    first = prefill(model, input_ids)
+    with torch.inference_mode():
+        first = prefill(model, input_ids)
     cuda_sync()
     prefill_seconds = time.perf_counter() - started
     peak = int(torch.cuda.max_memory_allocated()) if device.type == "cuda" else None
@@ -409,6 +411,7 @@ def evaluate_case(model, tokenizer, row: dict, dims, device: torch.device) -> li
     score_seconds = time.perf_counter() - score_started
     reference_logits = first.logits[:, -1, :].detach()
     base_cache = first.past_key_values
+    del first
     answer_ids = tokenizer(str(row["code"]), add_special_tokens=False)["input_ids"]
     evidence = evidence_token_indexes(
         rendered["prompt"],
