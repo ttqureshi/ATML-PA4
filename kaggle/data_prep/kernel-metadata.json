@@ -1,0 +1,16 @@
+{
+  "id": "mtayyabtahir/atml-pa4-data-prep",
+  "title": "atml-pa4-data-prep",
+  "code_file": "atml-pa4-data-prep.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}
