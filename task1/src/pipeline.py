@@ -1,0 +1,727 @@
+"""GPU stages. Test files open only after P3's tau and Q3's bit map are frozen."""
+
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+import numpy as np
+
+from shared.paths import DATA_REPO_COMMIT, DATA_REPO_URL
+from shared.seed import DEFAULT_SEED, set_seed
+from task1.src.allocation import ProjectionSize, allocate_p3_zeros, allocate_q3_bits
+from task1.src.apply import (
+    average_bits,
+    p3_matrix,
+    projection_scale_bytes,
+    prune_matrix,
+    quantize_awq,
+    quantize_uniform,
+)
+from task1.src.constants import (
+    AWQ_ALPHAS,
+    FULL_HELLASWAG_CONDITIONS,
+    GROUP_SIZE,
+    HELLASWAG_DIAGNOSTIC,
+    MODEL_ID,
+    P3_SPARSITIES,
+    P3_TAUS,
+    PRUNE_SPARSITIES,
+    QUANT_BITS,
+)
+from task1.src.data import TestFileGate, load_locked, require_locked, token_rows, write_json, write_jsonl
+from task1.src.evaluate import development_nll, evaluate_hellaswag, evaluate_windows
+from task1.src.model_ops import (
+    collect_activation_stats,
+    grouped_modules,
+    layer_index,
+    list_eligible,
+    load_qwen,
+    measure_reconstruction,
+    norm_name_for,
+    parameter_census,
+    projection_kind,
+    read_weight,
+    restore_state,
+    scale_norm_weight,
+    snapshot_state,
+    validate_layout,
+    write_weight,
+)
+from task1.src.quantize import channel_scales, compensation_plan
+from task1.src.resources import measure_latencies
+from task1.src.storage import quantized_model_bytes, sparse_storage_bytes
+
+
+HELLASWAG_PROTOCOL = (
+    "Locked Rowan/hellaswag validation examples. "
+    "The query is preprocess(activity_label + ': ' + ctx_a + ' ' + ctx_b.capitalize()), "
+    "and each choice is preprocess(ending), using the lm-evaluation-harness bracket cleanup. "
+    "The score is the conditional token log-likelihood of the choice given the query. "
+    "acc_norm divides by the character length of the preprocessed choice, not by token count."
+)
+
+
+def _runtime(model) -> dict:
+    import torch
+
+    try:
+        import transformers
+
+        transformers_version = transformers.__version__
+    except ImportError:
+        transformers_version = None
+    parameter = next(model.parameters())
+    return {
+        "model_id": MODEL_ID,
+        "data_repo": DATA_REPO_URL,
+        "data_repo_commit": DATA_REPO_COMMIT,
+        "seed": DEFAULT_SEED,
+        "torch": torch.__version__,
+        "transformers": transformers_version,
+        "device": parameter.device.type,
+        "dtype": str(parameter.dtype).replace("torch.", ""),
+        "attn_implementation": getattr(model.config, "_attn_implementation", None),
+        "num_hidden_layers": int(model.config.num_hidden_layers),
+        "hidden_size": int(model.config.hidden_size),
+        "intermediate_size": int(model.config.intermediate_size),
+        "vocab_size": int(model.config.vocab_size),
+        "tie_word_embeddings": bool(getattr(model.config, "tie_word_embeddings", False)),
+        "group_size": GROUP_SIZE,
+        "execution": "dense_fp16",
+        "packed_kernel": False,
+    }
+
+
+def _peak_now() -> int | None:
+    import torch
+
+    if not torch.cuda.is_available():
+        return None
+    return int(torch.cuda.max_memory_allocated())
+
+
+def _prepare(output: Path):
+    set_seed(DEFAULT_SEED)
+    output.mkdir(parents=True, exist_ok=True)
+    model, tokenizer = load_qwen()
+    modules = list_eligible(model)
+    census = parameter_census(model)
+    validate_layout(model, census)
+    snapshot = snapshot_state(model)
+    return model, tokenizer, modules, census, snapshot
+
+
+def _load_calibration(gate: TestFileGate):
+    calibration = token_rows(load_locked("calibration", gate))
+    development = token_rows(load_locked("development", gate))
+    return calibration, development
+
+
+def _load_tests(gate: TestFileGate):
+    if not gate.frozen:
+        raise RuntimeError("test files were requested before the allocation freeze")
+    wiki = load_locked("wikitext", gate)
+    c4 = load_locked("c4_validation", gate)
+    hellaswag = load_locked("hellaswag", gate)
+    hellaswag = sorted(hellaswag, key=lambda row: int(row["order"]))
+    return wiki, c4, hellaswag
+
+
+def _hellaswag_slice(records: list[dict], condition: str) -> tuple[list[dict], str]:
+    if condition in FULL_HELLASWAG_CONDITIONS:
+        return records, "full"
+    return records[:HELLASWAG_DIAGNOSTIC], "diagnostic_512"
+
+
+def _json_record(name: str, module, payload: dict, extra: dict | None = None) -> dict:
+    rows, cols = module.weight.shape
+    record = {
+        "module": name,
+        "layer": layer_index(name),
+        "projection": projection_kind(name),
+        "rows": int(rows),
+        "cols": int(cols),
+        "numel": int(rows * cols),
+    }
+    for key, value in payload.items():
+        if key in {"values", "scores", "mask", "scales", "values_original_space", "values_scaled_space"}:
+            continue
+        if isinstance(value, (np.floating, float)):
+            record[key] = float(value)
+        elif isinstance(value, (np.integer, int)):
+            record[key] = int(value)
+        else:
+            record[key] = value
+    if extra:
+        record.update(extra)
+    return record
+
+
+def _commit(model, modules, values: dict[str, np.ndarray], folds: list[tuple[str, np.ndarray]]) -> None:
+    seen = set()
+    for norm_name, scales in folds:
+        if norm_name in seen:
+            continue
+        scale_norm_weight(model, norm_name, scales)
+        seen.add(norm_name)
+    for name, module in modules:
+        write_weight(module, values[name])
+
+
+def _save_condition(output: Path, summary: dict, wiki: dict | None, c4: dict | None, hellaswag_rows: list[dict] | None) -> None:
+    folder = output / "conditions" / summary["condition"]
+    folder.mkdir(parents=True, exist_ok=True)
+    if wiki is not None:
+        np.savez_compressed(folder / "window_nll_wikitext.npz", nll_sums=wiki["nll_sums"], counts=wiki["counts"])
+        summary["quality"]["wikitext"] = {
+            key: wiki[key] for key in ("mean_nll", "perplexity", "n_tokens", "n_windows", "nll_sum")
+        }
+    if c4 is not None:
+        np.savez_compressed(folder / "window_nll_c4.npz", nll_sums=c4["nll_sums"], counts=c4["counts"])
+        summary["quality"]["c4_validation"] = {
+            key: c4[key] for key in ("mean_nll", "perplexity", "n_tokens", "n_windows", "nll_sum")
+        }
+    if hellaswag_rows is not None:
+        write_jsonl(folder / "hellaswag.jsonl", hellaswag_rows)
+    write_json(folder / "summary.json", summary)
+
+
+def _evaluate(model, tokenizer, wiki, c4, hellaswag, condition: str):
+    wiki_metrics = evaluate_windows(model, wiki)
+    c4_metrics = evaluate_windows(model, c4)
+    chosen, subset = _hellaswag_slice(hellaswag, condition)
+    hs_summary, hs_rows = evaluate_hellaswag(model, tokenizer, chosen)
+    hs_summary = dict(hs_summary)
+    hs_summary["subset"] = subset
+    return wiki_metrics, c4_metrics, hs_summary, hs_rows
+
+
+def _latency(model, skip: bool):
+    if skip:
+        return None
+    return measure_latencies(model, int(model.config.vocab_size))
+
+
+def run_baseline(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
+    gate = TestFileGate()
+    gate.freeze("fp16 baseline has no sparsity or bit allocation")
+    require_locked(["wikitext", "c4_validation", "hellaswag"], gate)
+    model, tokenizer, modules, census, _snapshot = _prepare(output)
+    wiki, c4, hellaswag = _load_tests(gate)
+    print("baseline: scoring FP16", flush=True)
+    wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, "fp16")
+    latency = _latency(model, skip_latency)
+    summary = {
+        "condition": "fp16",
+        "family": "baseline",
+        "method": "fp16",
+        "achieved_nonzero_fraction": 1.0,
+        "nominal_bits": 16,
+        "packed_bytes": census["n_unique"] * 2,
+        "dense_fp16_bytes": census["n_unique"] * 2,
+        "unstructured_sparse_bytes": sparse_storage_bytes(census["n_eligible"], census["n_eligible"], census["n_excluded"])[
+            "unstructured_sparse_bytes"
+        ],
+        "storage_note": "Execution is dense FP16. unstructured_sparse_bytes is the mask-plus-value estimate with every eligible weight nonzero.",
+        "calibration_seconds": 0.0,
+        "census": {key: census[key] for key in ("n_eligible", "n_excluded", "n_unique", "n_eligible_matrices", "tied")},
+        "quality": {"hellaswag": hs_summary, "protocol": HELLASWAG_PROTOCOL},
+        "latency": latency,
+        "runtime": _runtime(model),
+        "recipe": {"family": "baseline"},
+        "projections": [],
+    }
+    _ = modules
+    _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
+    write_json(output / "index.json", {"conditions": ["fp16"]})
+    print("baseline: wrote", output / "conditions" / "fp16" / "summary.json", flush=True)
+
+
+def _stats(model, modules, calibration, microbatch: int) -> tuple[dict, float, int | None]:
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    started = time.perf_counter()
+    stats = collect_activation_stats(model, modules, calibration, microbatch)
+    seconds = time.perf_counter() - started
+    return stats, seconds, _peak_now()
+
+
+def _wanda_relative(model, modules, calibration, microbatch, stats, sparsity: float) -> dict[str, float]:
+    recon = {}
+    for name, module in modules:
+        built = prune_matrix(read_weight(module), stats[name]["column_l2"], "wanda", sparsity)
+        recon[name] = built["values"]
+    measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
+    return {name: measured[name]["relative_mse"] for name in recon}
+
+
+def _apply_prune_method(modules, stats, method: str, sparsity: float, zero_counts: dict[str, int] | None = None):
+    values = {}
+    records = []
+    nonzero = 0
+    for name, module in modules:
+        weight = read_weight(module)
+        if method == "p3":
+            if zero_counts is None:
+                raise ValueError("p3 needs repaired zero counts")
+            built = p3_matrix(weight, stats[name]["column_l2"], zero_counts[name])
+        else:
+            built = prune_matrix(weight, stats[name]["column_l2"], method, sparsity)
+        values[name] = built["values"]
+        nonzero += int(built["nonzero"])
+        records.append(_json_record(name, module, built))
+    return values, records, nonzero
+
+
+def _p3_counts(modules, sensitivities: dict[str, float], sparsity: float, tau: float) -> dict[str, int]:
+    sizes = []
+    sens = []
+    for name, module in modules:
+        rows, cols = module.weight.shape
+        sizes.append(ProjectionSize(name, int(rows), int(cols)))
+        sens.append(float(sensitivities[name]))
+    zeros = allocate_p3_zeros(sizes, sens, sparsity, tau)
+    return {size.name: count for size, count in zip(sizes, zeros)}
+
+
+def run_prune(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
+    gate = TestFileGate()
+    require_locked(["calibration", "development"], gate)
+    model, tokenizer, modules, census, snapshot = _prepare(output)
+    calibration, development = _load_calibration(gate)
+    print("prune: collecting calibration activations", flush=True)
+    stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
+    print("prune: Wanda sensitivity at 50% and 75%", flush=True)
+    sensitivity = {}
+    for sparsity in P3_SPARSITIES:
+        sensitivity[sparsity] = _wanda_relative(model, modules, calibration, microbatch, stats, sparsity)
+    tau_report = {}
+    for tau in P3_TAUS:
+        per_sparsity = {}
+        nll_sum = 0.0
+        n_tokens = 0
+        for sparsity in P3_SPARSITIES:
+            restore_state(model, snapshot)
+            counts = _p3_counts(modules, sensitivity[sparsity], sparsity, tau)
+            values, _records, _nonzero = _apply_prune_method(modules, stats, "p3", sparsity, counts)
+            _commit(model, modules, values, [])
+            scored = development_nll(model, development)
+            per_sparsity[str(sparsity)] = {
+                "mean_nll": scored["mean_nll"],
+                "n_tokens": scored["n_tokens"],
+                "nll_sum": scored["nll_sum"],
+            }
+            nll_sum += float(scored["nll_sum"])
+            n_tokens += int(scored["n_tokens"])
+        tau_report[str(tau)] = {
+            "mean_nll": nll_sum / n_tokens,
+            "n_tokens": n_tokens,
+            "per_sparsity": per_sparsity,
+        }
+        print(f"prune: tau={tau} development mean NLL={tau_report[str(tau)]['mean_nll']:.6f}", flush=True)
+    winner = min(P3_TAUS, key=lambda tau: (tau_report[str(tau)]["mean_nll"], tau))
+    selection = {
+        "taus": list(P3_TAUS),
+        "winner": winner,
+        "tie_break": "smaller tau",
+        "score": "pooled development token NLL of the 50% and 75% models",
+        "development": tau_report,
+        "sensitivity_definition": "relative output MSE of an isolated Wanda prune at the target global sparsity",
+    }
+    write_json(output / "allocation" / "p3_tau.json", selection)
+    gate.freeze(f"P3 tau frozen at {winner}")
+    restore_state(model, snapshot)
+    wiki, c4, hellaswag = _load_tests(gate)
+    jobs = [("p1_s25", "magnitude", 0.25), ("p1_s50", "magnitude", 0.50), ("p1_s75", "magnitude", 0.75),
+            ("p2_s25", "wanda", 0.25), ("p2_s50", "wanda", 0.50), ("p2_s75", "wanda", 0.75),
+            ("p2_2to4", "wanda_2to4", 0.50), ("p3_s50", "p3", 0.50), ("p3_s75", "p3", 0.75)]
+    written = []
+    for condition, method, sparsity in jobs:
+        print(f"prune: {condition}", flush=True)
+        restore_state(model, snapshot)
+        counts = None
+        if method == "p3":
+            counts = _p3_counts(modules, sensitivity[sparsity], sparsity, winner)
+        started = time.perf_counter()
+        values, records, nonzero = _apply_prune_method(modules, stats, method, sparsity, counts)
+        if method == "p3":
+            for record in records:
+                record["sensitivity"] = float(sensitivity[sparsity][record["module"]])
+                record["sparsity"] = record["zeros"] / record["numel"]
+        elif method == "wanda":
+            for record in records:
+                record["sensitivity"] = float(sensitivity[sparsity][record["module"]]) if sparsity in sensitivity else None
+        measured = measure_reconstruction(model, modules, calibration, microbatch, values)
+        for record in records:
+            detail = measured[record["module"]]
+            record["relative_mse"] = detail["relative_mse"]
+            record["mse"] = detail["mse"]
+        _commit(model, modules, values, [])
+        unique_seconds = time.perf_counter() - started
+        wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, condition)
+        storage = sparse_storage_bytes(census["n_eligible"], nonzero, census["n_excluded"])
+        summary = {
+            "condition": condition,
+            "family": "prune",
+            "method": method,
+            "sparsity_target": sparsity,
+            "tau": winner if method == "p3" else None,
+            "achieved_nonzero_fraction": nonzero / census["n_eligible"],
+            "achieved_sparsity": 1.0 - (nonzero / census["n_eligible"]),
+            "nominal_bits": None,
+            "packed_bytes": storage["unstructured_sparse_bytes"],
+            "dense_fp16_bytes": storage["dense_fp16_bytes"],
+            "unstructured_sparse_bytes": storage["unstructured_sparse_bytes"],
+            "storage": storage,
+            "storage_note": "packed_bytes is the unstructured mask-bit plus 16-bit-nonzero estimate. Latency is a dense FP16 forward of the explicit zeros.",
+            "calibration_seconds": stat_seconds + unique_seconds,
+            "shared_activation_seconds": stat_seconds,
+            "unique_calibration_seconds": unique_seconds,
+            "calibration_peak_allocated_bytes": stat_peak,
+            "calibration_time_note": "shared_activation_seconds is the one Wanda/AWQ activation pass for the whole prune stage, repeated on every condition so it is not added up.",
+            "quality": {"hellaswag": hs_summary, "protocol": HELLASWAG_PROTOCOL},
+            "latency": _latency(model, skip_latency),
+            "runtime": _runtime(model),
+            "recipe": {"family": "prune", "method": method, "sparsity": sparsity, "tau": winner if method == "p3" else None},
+            "projections": records,
+        }
+        _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
+        written.append(condition)
+    _write_index(output, written)
+    print("prune: done", flush=True)
+
+
+def _search_alphas(model, modules, calibration, microbatch, stats, bits: int):
+    mse_table = {name: {} for name, _module in modules}
+    for alpha in AWQ_ALPHAS:
+        recon = {}
+        for name, module in modules:
+            built = quantize_awq(read_weight(module), stats[name]["mean_abs"], float(alpha), bits)
+            recon[name] = built["values_original_space"]
+        measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
+        for name in recon:
+            mse_table[name][float(alpha)] = measured[name]["mse"]
+        print(f"quantize: alpha {alpha} at INT{bits} searched", flush=True)
+    chosen = {}
+    for name, scores in mse_table.items():
+        chosen[name] = min(scores, key=lambda alpha: (scores[alpha], alpha))
+    return chosen, mse_table
+
+
+def _scale_plan(modules, stats, alphas: dict[str, float]) -> dict[str, str]:
+    """Fold/store decision from channel scales. It does not depend on bit width."""
+    modes = {}
+    for _prefix, members in grouped_modules(modules).items():
+        scales = {}
+        names = {}
+        for name, _module in members:
+            kind = projection_kind(name)
+            scales[kind] = channel_scales(stats[name]["mean_abs"], alphas[name])
+            names[kind] = name
+        plan = compensation_plan(scales)
+        for kind, mode in plan.items():
+            modes[names[kind]] = mode
+    return modes
+
+
+def _build_quant(modules, stats, method: str, bits: int | None, alphas: dict[str, float] | None, bit_map: dict[str, int] | None, modes: dict[str, str] | None):
+    values = {}
+    recon = {}
+    folds = []
+    records = []
+    folded = set()
+    for name, module in modules:
+        weight = read_weight(module)
+        assigned = int(bits if bit_map is None else bit_map[name])
+        if method == "q1":
+            built = quantize_uniform(weight, assigned)
+            values[name] = built["values_original_space"]
+            recon[name] = built["values_original_space"]
+            mode = "none"
+            scale_bytes = 0
+            alpha = None
+        else:
+            if alphas is None or modes is None:
+                raise ValueError("AWQ quantization needs frozen alphas and a compensation plan")
+            alpha = float(alphas[name])
+            built = quantize_awq(weight, stats[name]["mean_abs"], alpha, assigned)
+            mode = modes[name]
+            scale_bytes = projection_scale_bytes(int(module.weight.shape[1]), mode)
+            recon[name] = built["values_original_space"]
+            if mode == "fold":
+                norm = norm_name_for(name)
+                if norm is None:
+                    raise RuntimeError(f"{name} was marked fold but has no RMSNorm")
+                if norm not in folded:
+                    folds.append((norm, built["scales"]))
+                    folded.add(norm)
+                values[name] = built["values_scaled_space"]
+            else:
+                values[name] = built["values_original_space"]
+        records.append(
+            _json_record(
+                name,
+                module,
+                built,
+                {"compensation": mode, "scale_bytes": scale_bytes, "alpha": alpha, "bits": assigned},
+            )
+        )
+    return values, recon, folds, records
+
+
+def _quant_bytes(census, records) -> dict:
+    projections = [
+        {"rows": row["rows"], "cols": row["cols"], "bits": row["bits"], "scale_bytes": row["scale_bytes"]}
+        for row in records
+    ]
+    packed = quantized_model_bytes(projections, census["n_excluded"])
+    nonzero = sum(int(row["nonzero"]) for row in records)
+    sparse = sparse_storage_bytes(census["n_eligible"], nonzero, census["n_excluded"])
+    packed["dense_fp16_bytes"] = sparse["dense_fp16_bytes"]
+    packed["unstructured_sparse_bytes"] = sparse["unstructured_sparse_bytes"]
+    packed["nominal_bits"] = average_bits(records)
+    return packed
+
+
+def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
+    gate = TestFileGate()
+    require_locked(["calibration", "development"], gate)
+    model, tokenizer, modules, census, snapshot = _prepare(output)
+    calibration, development = _load_calibration(gate)
+    print("quantize: collecting calibration activations", flush=True)
+    stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
+    alphas = {}
+    mse_tables = {}
+    for bits in QUANT_BITS:
+        restore_state(model, snapshot)
+        chosen, table = _search_alphas(model, modules, calibration, microbatch, stats, bits)
+        alphas[bits] = chosen
+        mse_tables[bits] = table
+    modes = _scale_plan(modules, stats, alphas[4])
+    # Budgets use the same byte function as the Q3 trial maps.
+    def bytes_for(bit_of: dict[str, int], mode_of: dict[str, str]) -> int:
+        projections = []
+        for name, module in modules:
+            rows, cols = module.weight.shape
+            projections.append(
+                {
+                    "rows": int(rows),
+                    "cols": int(cols),
+                    "bits": int(bit_of[name]),
+                    "scale_bytes": projection_scale_bytes(int(cols), mode_of[name]) if mode_of else 0,
+                }
+            )
+        return quantized_model_bytes(projections, census["n_excluded"])["packed_bytes"]
+
+    q2_budgets = {}
+    for bits in (4, 3):
+        mode_of = _scale_plan(modules, stats, alphas[bits])
+        q2_budgets[bits] = bytes_for({name: bits for name, _module in modules}, mode_of)
+    q3_modes = modes
+    sensitivities = {name: float(mse_tables[4][name][alphas[4][name]]) for name, _module in modules}
+
+    def q3_byte_fn(bit_of: dict[str, int]) -> int:
+        return bytes_for(bit_of, q3_modes)
+
+    allocations = {}
+    for bits, label in ((4, "q3_b4"), (3, "q3_b3")):
+        allocation = allocate_q3_bits(
+            [name for name, _module in modules],
+            [sensitivities[name] for name, _module in modules],
+            q3_byte_fn,
+            q2_budgets[bits],
+        )
+        allocations[label] = allocation
+        write_json(
+            output / "allocation" / f"{label}.json",
+            {
+                "budget_condition": f"q2_b{bits}",
+                "budget_bytes": allocation.budget_bytes,
+                "final_bytes": allocation.final_bytes,
+                "within_budget": allocation.within_budget,
+                "bits": allocation.bits,
+                "steps": [dict(step) for step in allocation.steps],
+                "sensitivity": sensitivities,
+                "sensitivity_definition": "Q2 calibration output MSE at INT4, original-space reconstruction",
+                "scales": "INT4 AWQ channel scales; only the bit width changes",
+                "rule": "start at 2 bits; promote the most sensitive unfinished projection one ladder step; stop when that step exceeds the budget",
+            },
+        )
+        print(f"quantize: froze {label} at {allocation.final_bytes} bytes (budget {allocation.budget_bytes})", flush=True)
+    gate.freeze("Q3 bit maps written")
+    # Development diagnostic after the freeze. It is not allowed to edit the maps.
+    frozen_maps = {label: dict(allocation.bits) for label, allocation in allocations.items()}
+    dev_diag = {}
+    for label, allocation in allocations.items():
+        restore_state(model, snapshot)
+        values, recon, folds, _records = _build_quant(modules, stats, "q3", None, alphas[4], allocation.bits, q3_modes)
+        measured = measure_reconstruction(model, modules, development, microbatch, recon)
+        _commit(model, modules, values, folds)
+        scored = development_nll(model, development)
+        dev_diag[label] = {
+            "mean_nll": scored["mean_nll"],
+            "n_tokens": scored["n_tokens"],
+            "mean_projection_mse": float(np.mean([measured[name]["mse"] for name in measured])),
+        }
+        if allocation.bits != frozen_maps[label]:
+            raise RuntimeError("development diagnostic changed a frozen Q3 bit map")
+    write_json(output / "allocation" / "q3_development_diagnostic.json", dev_diag)
+    restore_state(model, snapshot)
+    wiki, c4, hellaswag = _load_tests(gate)
+    jobs = []
+    for bits in QUANT_BITS:
+        jobs.append((f"q1_b{bits}", "q1", bits, None, None, None))
+        jobs.append((f"q2_b{bits}", "q2", bits, alphas[bits], _scale_plan(modules, stats, alphas[bits]), None))
+    for label, allocation in allocations.items():
+        jobs.append((label, "q3", None, alphas[4], q3_modes, allocation.bits))
+    written = []
+    for condition, method, bits, alpha_map, mode_map, bit_map in jobs:
+        print(f"quantize: {condition}", flush=True)
+        restore_state(model, snapshot)
+        started = time.perf_counter()
+        values, recon, folds, records = _build_quant(modules, stats, method, bits, alpha_map, bit_map, mode_map)
+        if method == "q2":
+            for record in records:
+                record["mse"] = float(mse_tables[bits][record["module"]][record["alpha"]])
+                record["mse_by_alpha"] = {str(key): float(value) for key, value in mse_tables[bits][record["module"]].items()}
+        elif method == "q3":
+            for record in records:
+                record["sensitivity"] = sensitivities[record["module"]]
+            measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
+            for record in records:
+                record["mse"] = measured[record["module"]]["mse"]
+        else:
+            measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
+            for record in records:
+                record["mse"] = measured[record["module"]]["mse"]
+        _commit(model, modules, values, folds)
+        unique_seconds = time.perf_counter() - started
+        storage = _quant_bytes(census, records)
+        wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, condition)
+        summary = {
+            "condition": condition,
+            "family": "quantize",
+            "method": method,
+            "bits": bits,
+            "nominal_bits": storage["nominal_bits"],
+            "achieved_nonzero_fraction": sum(row["nonzero"] for row in records) / census["n_eligible"],
+            "packed_bytes": storage["packed_bytes"],
+            "dense_fp16_bytes": storage["dense_fp16_bytes"],
+            "unstructured_sparse_bytes": storage["unstructured_sparse_bytes"],
+            "storage": storage,
+            "storage_note": "packed_bytes counts the bit payload, 4 metadata bytes per group, serialized FP16 scales, and excluded FP16 tensors with tied weights once. Latency is dense FP16 of the reconstructed weights, not a low-bit kernel.",
+            "calibration_seconds": stat_seconds + unique_seconds,
+            "shared_activation_seconds": stat_seconds,
+            "unique_calibration_seconds": unique_seconds,
+            "calibration_peak_allocated_bytes": stat_peak,
+            "quality": {"hellaswag": hs_summary, "protocol": HELLASWAG_PROTOCOL},
+            "latency": _latency(model, skip_latency),
+            "runtime": _runtime(model),
+            "recipe": {
+                "family": "quantize",
+                "method": method,
+                "bits": bits,
+                "alphas": alpha_map,
+                "bit_map": bit_map,
+            },
+            "projections": records,
+            "q3_development_diagnostic": dev_diag.get(condition),
+        }
+        _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
+        written.append(condition)
+    _write_index(output, written)
+    print("quantize: done", flush=True)
+
+
+def _write_index(output: Path, new_conditions: list[str]) -> None:
+    index_path = output / "index.json"
+    existing: list[str] = []
+    if index_path.is_file():
+        import json
+
+        existing = list(json.loads(index_path.read_text(encoding="utf-8")).get("conditions", []))
+    for condition in new_conditions:
+        if condition not in existing:
+            existing.append(condition)
+    write_json(index_path, {"conditions": existing})
+
+
+def run_resources(output: Path, microbatch: int = 4, remeasure: bool = False) -> None:
+    """Fill dense-FP16 latency for conditions whose summaries do not have it yet."""
+    import json
+
+    index_path = output / "index.json"
+    if not index_path.is_file():
+        raise SystemExit(f"No {index_path}. Run baseline, prune, and quantize before resources.")
+    names = json.loads(index_path.read_text(encoding="utf-8"))["conditions"]
+    pending = []
+    for name in names:
+        summary_path = output / "conditions" / name / "summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        latency = summary.get("latency")
+        if remeasure or not latency or latency.get("prefill", {}).get("512", {}).get("status") != "ok":
+            pending.append((name, summary))
+    if not pending:
+        print("resources: latency already recorded for every condition", flush=True)
+        return
+    needs_stats = any(item[1]["recipe"]["family"] != "baseline" for item in pending)
+    if needs_stats:
+        require_locked(["calibration"], TestFileGate())
+    model, _tokenizer, modules, _census, snapshot = _prepare(output)
+    stats = None
+    if needs_stats:
+        gate = TestFileGate()
+        calibration, _development = _load_calibration(gate)
+        stats, _seconds, _peak = _stats(model, modules, calibration, microbatch)
+    for name, summary in pending:
+        print(f"resources: {name}", flush=True)
+        restore_state(model, snapshot)
+        recipe = summary["recipe"]
+        if recipe["family"] == "prune":
+            if stats is None:
+                raise RuntimeError("prune resources need calibration activations")
+            counts = None
+            if recipe["method"] == "p3":
+                sensitivity = {
+                    record["module"]: float(record["sensitivity"]) for record in summary["projections"]
+                }
+                counts = _p3_counts(modules, sensitivity, float(recipe["sparsity"]), float(recipe["tau"]))
+            values, _records, _nonzero = _apply_prune_method(
+                modules, stats, recipe["method"], float(recipe["sparsity"]), counts
+            )
+            _commit(model, modules, values, [])
+        elif recipe["family"] == "quantize" and recipe["method"] != "q1":
+            if stats is None or recipe.get("alphas") is None:
+                raise SystemExit(f"{name} is missing frozen AWQ alphas; rerun quantize.")
+            alphas = {key: float(value) for key, value in recipe["alphas"].items()}
+            modes = _scale_plan(modules, stats, alphas)
+            bit_map = recipe.get("bit_map")
+            if bit_map is not None:
+                bit_map = {key: int(value) for key, value in bit_map.items()}
+            values, _recon, folds, _records = _build_quant(
+                modules,
+                stats,
+                recipe["method"],
+                None if recipe["bits"] is None else int(recipe["bits"]),
+                alphas,
+                bit_map,
+                modes,
+            )
+            _commit(model, modules, values, folds)
+        elif recipe["family"] == "quantize":
+            values, _recon, folds, _records = _build_quant(
+                modules, stats, "q1", int(recipe["bits"]), None, None, None
+            )
+            _commit(model, modules, values, folds)
+        summary["latency"] = measure_latencies(model, int(model.config.vocab_size))
+        write_json(output / "conditions" / name / "summary.json", summary)
+    print("resources: done", flush=True)
+
+
+def run_analyze(output: Path) -> None:
+    from task1.src.analyze import analyze
+
+    analyze(output)
