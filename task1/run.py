@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from task1.src.gpu_smoke import run_gpu_smoke
 from task1.src.pipeline import run_analyze, run_baseline, run_prune, run_quantize, run_resources
 from task1.src.smoke import run_smoke
 
@@ -31,7 +32,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Task 1 pruning and quantization")
     parser.add_argument(
         "stage",
-        choices=("unit", "smoke", "baseline", "prune", "quantize", "resources", "analyze"),
+        choices=("unit", "smoke", "gpu-smoke", "baseline", "prune", "quantize", "resources", "analyze"),
     )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--microbatch", type=int, default=4)
@@ -44,6 +45,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.stage == "smoke":
         output = args.output or (ROOT / "task1" / "runs" / "smoke")
         run_smoke(output, ROOT)
+        return
+    if args.stage == "gpu-smoke":
+        output = args.output or (ROOT / "task1" / "runs" / "gpu-smoke")
+        run_gpu_smoke(output, ROOT)
         return
     output = args.output or (ROOT / "task1" / "results")
     if args.stage == "baseline":
