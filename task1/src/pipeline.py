@@ -294,10 +294,43 @@ def run_prune(output: Path, microbatch: int = 4, skip_latency: bool = False) -> 
     calibration, development = _load_calibration(gate)
     print("prune: collecting calibration activations", flush=True)
     stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
+    cached = _load_p3_cache(output)
+    if cached is not None:
+        sensitivity, selection = cached
+        winner = selection["winner"]
+        print(f"prune: reusing frozen sensitivity and tau={winner} from {output / 'allocation'}", flush=True)
+    else:
+        sensitivity, selection = _select_p3_tau(model, modules, calibration, development, microbatch, stats, snapshot, output)
+        winner = selection["winner"]
+    gate.freeze(f"P3 tau frozen at {winner}")
+    restore_state(model, snapshot)
+    wiki, c4, hellaswag = _load_tests(gate)
+    _prune_conditions(output, model, tokenizer, modules, census, snapshot, calibration, microbatch, skip_latency,
+                      stats, stat_seconds, stat_peak, sensitivity, winner, wiki, c4, hellaswag)
+
+
+def _load_p3_cache(output: Path):
+    import json
+
+    tau_path = output / "allocation" / "p3_tau.json"
+    sens_path = output / "allocation" / "p3_sensitivity.json"
+    if not (tau_path.is_file() and sens_path.is_file()):
+        return None
+    selection = json.loads(tau_path.read_text(encoding="utf-8"))
+    raw = json.loads(sens_path.read_text(encoding="utf-8"))
+    sensitivity = {float(key): {name: float(v) for name, v in table.items()} for key, table in raw.items()}
+    return sensitivity, selection
+
+
+def _select_p3_tau(model, modules, calibration, development, microbatch, stats, snapshot, output: Path):
     print("prune: Wanda sensitivity at 50% and 75%", flush=True)
     sensitivity = {}
     for sparsity in P3_SPARSITIES:
         sensitivity[sparsity] = _wanda_relative(model, modules, calibration, microbatch, stats, sparsity)
+    write_json(
+        output / "allocation" / "p3_sensitivity.json",
+        {str(sparsity): table for sparsity, table in sensitivity.items()},
+    )
     tau_report = {}
     for tau in P3_TAUS:
         per_sparsity = {}
@@ -332,14 +365,20 @@ def run_prune(output: Path, microbatch: int = 4, skip_latency: bool = False) -> 
         "sensitivity_definition": "relative output MSE of an isolated Wanda prune at the target global sparsity",
     }
     write_json(output / "allocation" / "p3_tau.json", selection)
-    gate.freeze(f"P3 tau frozen at {winner}")
-    restore_state(model, snapshot)
-    wiki, c4, hellaswag = _load_tests(gate)
+    return sensitivity, selection
+
+
+def _prune_conditions(output, model, tokenizer, modules, census, snapshot, calibration, microbatch, skip_latency,
+                      stats, stat_seconds, stat_peak, sensitivity, winner, wiki, c4, hellaswag) -> None:
     jobs = [("p1_s25", "magnitude", 0.25), ("p1_s50", "magnitude", 0.50), ("p1_s75", "magnitude", 0.75),
             ("p2_s25", "wanda", 0.25), ("p2_s50", "wanda", 0.50), ("p2_s75", "wanda", 0.75),
             ("p2_2to4", "wanda_2to4", 0.50), ("p3_s50", "p3", 0.50), ("p3_s75", "p3", 0.75)]
     written = []
     for condition, method, sparsity in jobs:
+        if _condition_done(output, condition):
+            print(f"prune: {condition} already written, skipping", flush=True)
+            _write_index(output, [condition])
+            continue
         print(f"prune: {condition}", flush=True)
         restore_state(model, snapshot)
         counts = None
@@ -390,7 +429,7 @@ def run_prune(output: Path, microbatch: int = 4, skip_latency: bool = False) -> 
         }
         _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
         written.append(condition)
-    _write_index(output, written)
+        _write_index(output, [condition])
     print("prune: done", flush=True)
 
 
@@ -579,6 +618,10 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
         jobs.append((label, "q3", None, alphas[4], q3_modes, allocation.bits))
     written = []
     for condition, method, bits, alpha_map, mode_map, bit_map in jobs:
+        if _condition_done(output, condition):
+            print(f"quantize: {condition} already written, skipping", flush=True)
+            _write_index(output, [condition])
+            continue
         print(f"quantize: {condition}", flush=True)
         restore_state(model, snapshot)
         started = time.perf_counter()
@@ -632,8 +675,13 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
         }
         _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
         written.append(condition)
-    _write_index(output, written)
+        _write_index(output, [condition])
     print("quantize: done", flush=True)
+
+
+def _condition_done(output: Path, condition: str) -> bool:
+    """A condition is finished once its summary is on disk (summary.json is written last)."""
+    return (output / "conditions" / condition / "summary.json").is_file()
 
 
 def _write_index(output: Path, new_conditions: list[str]) -> None:

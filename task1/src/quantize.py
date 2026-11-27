@@ -99,36 +99,31 @@ def quantize_weight(weight: np.ndarray, bits: int, group_size: int = GROUP_SIZE)
     qmax = (1 << bits) - 1
     n_groups_per_row = math.ceil(cols / group_size)
     n_groups = rows * n_groups_per_row
-    values = np.empty_like(matrix)
-    scales = np.empty(n_groups, dtype=np.float64)
-    zero_points = np.empty(n_groups, dtype=np.int64)
-    pad_counts = np.empty(n_groups, dtype=np.int64)
-    codes = np.empty(rows * cols, dtype=np.int64)
-    group_index = 0
-    code_index = 0
-    for row in range(rows):
-        for start in range(0, cols, group_size):
-            end = min(start + group_size, cols)
-            chunk = matrix[row, start:end]
-            pad = group_size - chunk.shape[0]
-            if pad:
-                ranged = np.concatenate([chunk, np.full(pad, chunk[-1], dtype=np.float64)])
-            else:
-                ranged = chunk
-            w_min = float(ranged.min())
-            w_max = float(ranged.max())
-            scale = (w_max - w_min) / qmax
-            if scale == 0.0 or not math.isfinite(scale):
-                scale = 1.0
-            zero = int(np.clip(np.rint(-w_min / scale), 0, qmax))
-            quantized = np.clip(np.rint(chunk / scale) + zero, 0, qmax).astype(np.int64)
-            values[row, start:end] = scale * (quantized - zero)
-            scales[group_index] = scale
-            zero_points[group_index] = zero
-            pad_counts[group_index] = pad
-            codes[code_index : code_index + quantized.shape[0]] = quantized
-            code_index += int(quantized.shape[0])
-            group_index += 1
+    # Vectorized over all groups. Every element goes through the same float64
+    # operations as a per-group loop, so the output is bit-identical.
+    padded_cols = n_groups_per_row * group_size
+    pad = padded_cols - cols
+    if pad:
+        # The trailing partial group repeats its last real weight for min/max only.
+        ranged = np.concatenate([matrix, np.repeat(matrix[:, -1:], pad, axis=1)], axis=1)
+    else:
+        ranged = matrix
+    groups = ranged.reshape(rows, n_groups_per_row, group_size)
+    w_min = groups.min(axis=-1)
+    w_max = groups.max(axis=-1)
+    scale = (w_max - w_min) / qmax
+    scale = np.where((scale == 0.0) | ~np.isfinite(scale), 1.0, scale)
+    zero = np.clip(np.rint(-w_min / scale), 0, qmax).astype(np.int64)
+    quantized = np.clip(np.rint(groups / scale[..., None]) + zero[..., None], 0, qmax).astype(np.int64)
+    values = (scale[..., None] * (quantized - zero[..., None])).reshape(rows, padded_cols)[:, :cols]
+    values = np.ascontiguousarray(values)
+    codes = np.ascontiguousarray(quantized.reshape(rows, padded_cols)[:, :cols]).reshape(-1)
+    scales = scale.reshape(-1)
+    zero_points = zero.reshape(-1)
+    pad_counts = np.zeros((rows, n_groups_per_row), dtype=np.int64)
+    pad_counts[:, -1] = pad
+    pad_counts = pad_counts.reshape(-1)
+    assert scales.shape[0] == n_groups
     return QuantizedTensor(
         values=values,
         scales=scales,

@@ -83,20 +83,13 @@ def keep_mask(scores: np.ndarray, zero_counts: np.ndarray | int) -> np.ndarray:
         counts = np.asarray(zero_counts, dtype=np.int64)
         if counts.shape != (rows,):
             raise ValueError("zero_counts must be a scalar or one count per row")
-    mask = np.ones((rows, cols), dtype=bool)
-    columns = np.arange(cols)
-    for row in range(rows):
-        k = int(counts[row])
-        if k <= 0:
-            continue
-        if k >= cols:
-            mask[row] = False
-            continue
-        # Primary key is the score. The column index breaks ties toward
-        # zeroing the smaller index first.
-        order = np.lexsort((columns, metric[row]))
-        mask[row, order[:k]] = False
-    return mask
+    # A stable argsort orders by score and keeps the lower column index first
+    # among equal scores, the same order as ``np.lexsort((columns, row))``.
+    # A weight is zeroed when its rank in that order is below the row's count.
+    order = np.argsort(metric, axis=1, kind="stable")
+    ranks = np.empty_like(order)
+    np.put_along_axis(ranks, order, np.broadcast_to(np.arange(cols), (rows, cols)), axis=1)
+    return ranks >= counts.reshape(-1, 1)
 
 
 def uniform_keep_mask(scores: np.ndarray, sparsity: float) -> np.ndarray:
@@ -121,15 +114,13 @@ def two_four_keep_mask(scores: np.ndarray) -> np.ndarray:
     rows, cols = metric.shape
     if cols % 4 != 0:
         raise ValueError("2:4 grouping needs a multiple of 4 input channels")
-    mask = np.zeros((rows, cols), dtype=bool)
-    local = np.arange(4)
-    for row in range(rows):
-        for start in range(0, cols, 4):
-            block = metric[row, start : start + 4]
-            order = np.lexsort((local, -block))
-            chosen = order[:2]
-            mask[row, start + chosen] = True
-    return mask
+    blocks = metric.reshape(rows, cols // 4, 4)
+    # Stable argsort on the negated scores: highest first, lower index on ties,
+    # the same order as ``np.lexsort((local, -block))``.
+    order = np.argsort(-blocks, axis=-1, kind="stable")
+    mask = np.zeros(blocks.shape, dtype=bool)
+    np.put_along_axis(mask, order[..., :2], True, axis=-1)
+    return mask.reshape(rows, cols)
 
 
 def score_summary(scores: np.ndarray) -> dict[str, float | int]:
