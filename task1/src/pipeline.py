@@ -253,7 +253,7 @@ def _wanda_relative(model, modules, calibration, microbatch, stats, sparsity: fl
     recon = {}
     for name, module in modules:
         built = prune_matrix(read_weight(module), stats[name]["column_l2"], "wanda", sparsity)
-        recon[name] = built["values"]
+        recon[name] = _as_fp16(built["values"])
     measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
     return {name: measured[name]["relative_mse"] for name in recon}
 
@@ -270,7 +270,7 @@ def _apply_prune_method(modules, stats, method: str, sparsity: float, zero_count
             built = p3_matrix(weight, stats[name]["column_l2"], zero_counts[name])
         else:
             built = prune_matrix(weight, stats[name]["column_l2"], method, sparsity)
-        values[name] = built["values"]
+        values[name] = _as_fp16(built["values"])
         nonzero += int(built["nonzero"])
         records.append(_json_record(name, module, built))
     return values, records, nonzero
@@ -433,13 +433,27 @@ def _prune_conditions(output, model, tokenizer, modules, census, snapshot, calib
     print("prune: done", flush=True)
 
 
+def _as_fp16(values: np.ndarray) -> np.ndarray:
+    """Hold an FP16-rounded float64 matrix as float16: exact, and a quarter of the host RAM.
+
+    Every consumer (write_weight, measure_reconstruction) casts to float32 anyway, so results
+    are bit-identical. Holding all 196 projections as float64 at once needs ~12 GB per copy
+    and ran the Kaggle host out of memory (exit -9) after the Q3 freeze.
+    """
+    half = np.asarray(values, dtype=np.float16)
+    if not np.array_equal(half.astype(np.float64), np.asarray(values, dtype=np.float64)):
+        raise RuntimeError("quantized values are not exactly representable in FP16")
+    return half
+
+
 def _search_alphas(model, modules, calibration, microbatch, stats, bits: int):
     mse_table = {name: {} for name, _module in modules}
     for alpha in AWQ_ALPHAS:
         recon = {}
         for name, module in modules:
             built = quantize_awq(read_weight(module), stats[name]["mean_abs"], float(alpha), bits)
-            recon[name] = built["values_original_space"]
+            recon[name] = _as_fp16(built["values_original_space"])
+            del built
         measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
         for name in recon:
             mse_table[name][float(alpha)] = measured[name]["mse"]
@@ -477,8 +491,8 @@ def _build_quant(modules, stats, method: str, bits: int | None, alphas: dict[str
         assigned = int(bits if bit_map is None else bit_map[name])
         if method == "q1":
             built = quantize_uniform(weight, assigned)
-            values[name] = built["values_original_space"]
-            recon[name] = built["values_original_space"]
+            values[name] = _as_fp16(built["values_original_space"])
+            recon[name] = values[name]
             mode = "none"
             scale_bytes = 0
             alpha = None
@@ -489,7 +503,7 @@ def _build_quant(modules, stats, method: str, bits: int | None, alphas: dict[str
             built = quantize_awq(weight, stats[name]["mean_abs"], alpha, assigned)
             mode = modes[name]
             scale_bytes = projection_scale_bytes(int(module.weight.shape[1]), mode)
-            recon[name] = built["values_original_space"]
+            recon[name] = _as_fp16(built["values_original_space"])
             if mode == "fold":
                 norm = norm_name_for(name)
                 if norm is None:
@@ -497,9 +511,9 @@ def _build_quant(modules, stats, method: str, bits: int | None, alphas: dict[str
                 if norm not in folded:
                     folds.append((norm, built["scales"]))
                     folded.add(norm)
-                values[name] = built["values_scaled_space"]
+                values[name] = _as_fp16(built["values_scaled_space"])
             else:
-                values[name] = built["values_original_space"]
+                values[name] = recon[name]
         records.append(
             _json_record(
                 name,

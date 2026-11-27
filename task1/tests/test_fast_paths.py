@@ -187,5 +187,26 @@ class FastPathEquivalence(unittest.TestCase):
                 self.assertEqual(sum(zeros), uniform_zero_budget([(s.rows, s.cols) for s in sizes], sparsity))
 
 
+    def test_fp16_storage_is_exact_for_every_consumer(self):
+        from task1.src.apply import prune_matrix, quantize_awq, quantize_uniform
+        from task1.src.pipeline import _as_fp16
+
+        rng = np.random.default_rng(5)
+        w = rng.standard_normal((16, 256)) * 0.05
+        mean_abs = np.abs(rng.standard_normal(256)) + 0.1
+        col = np.abs(rng.standard_normal(256)) + 0.1
+        payloads = [quantize_uniform(w, 4)["values_original_space"]]
+        awq = quantize_awq(w, mean_abs, 0.5, 3)
+        payloads += [awq["values_original_space"], awq["values_scaled_space"]]
+        payloads.append(prune_matrix(w, col, "wanda", 0.5)["values"])
+        for values in payloads:
+            half = _as_fp16(values)
+            self.assertEqual(half.dtype, np.float16)
+            # write_weight and measure_reconstruction both read through float32.
+            np.testing.assert_array_equal(half.astype(np.float32), np.asarray(values, dtype=np.float32))
+        with self.assertRaises(RuntimeError):
+            _as_fp16(np.array([[0.1]]))
+
+
 if __name__ == "__main__":
     unittest.main()
