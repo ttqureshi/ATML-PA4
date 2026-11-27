@@ -289,6 +289,11 @@ class ToySamplerTests(unittest.TestCase):
         result = decoder.generate(gamma=3, max_new_tokens=5, eos_id=None)
         expected = prompt + list(result.tokens)
         self.assertEqual(len(result.tokens), 5)
+        self.assertEqual(decoder.committed, expected)
+        # Between rounds each cache holds the emitted sequence minus its pending tail.
+        self.assertEqual(decoder.target.token_ids, expected[:-1])
+        self.assertEqual(decoder.target.cache.get_seq_length(), len(expected) - 1)
+        decoder.sync_caches()
         self.assertEqual(decoder.target.token_ids, expected)
         self.assertEqual(decoder.draft.token_ids, expected)
         self.assertEqual(decoder.target.cache.get_seq_length(), len(expected))

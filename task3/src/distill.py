@@ -420,13 +420,13 @@ def _require_cuda(action: str) -> None:
         raise SystemExit(f"{action} requires CUDA and will not download weights on CPU.")
 
 
-def load_frozen_causal(model_name: str):
+def load_frozen_causal(model_name: str, dtype=torch.float16):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.float16,
+        torch_dtype=dtype,
         attn_implementation="sdpa",
     )
     model.to("cuda")

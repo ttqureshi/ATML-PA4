@@ -183,14 +183,52 @@ def split_prefill_max_abs(model, token_ids: Sequence[int], split: int) -> float:
     return float((full.float() - joined.float()).abs().max().cpu())
 
 
-def cache_matches_full_forward(target_model, draft_model, token_ids: Sequence[int], eos_id: int | None) -> dict:
-    """Run a short speculative generation and compare the cache with a full forward."""
+def _cache_layers(cache) -> list[tuple]:
+    if hasattr(cache, "layers"):
+        return [(layer.keys, layer.values) for layer in cache.layers]
+    return list(zip(cache.key_cache, cache.value_cache))
+
+
+def cache_kv_max_abs(model, cache, token_ids: Sequence[int]) -> float:
+    """Largest gap between a rolled-back/advanced cache and a fresh one-pass cache.
+
+    Every layer's keys and values at every position are compared, so a wrong
+    rotary position or a stale entry left by a crop shows up here.
+    """
+    device = next(model.parameters()).device
+    ids = torch.tensor([list(token_ids)], dtype=torch.long, device=device)
+    with torch.inference_mode():
+        fresh = model(input_ids=ids, use_cache=True).past_key_values
+    worst = 0.0
+    mine = _cache_layers(cache)
+    theirs = _cache_layers(fresh)
+    if len(mine) != len(theirs):
+        raise RuntimeError("cache layer counts differ")
+    for (key, value), (ref_key, ref_value) in zip(mine, theirs):
+        if key.shape != ref_key.shape or value.shape != ref_value.shape:
+            raise RuntimeError(f"cache shape {tuple(key.shape)} differs from fresh {tuple(ref_key.shape)}")
+        worst = max(worst, float((key.float() - ref_key.float()).abs().max()), float((value.float() - ref_value.float()).abs().max()))
+    return worst
+
+
+def cache_matches_full_forward(target_model, draft_model, token_ids: Sequence[int], eos_id: int | None, max_new_tokens: int = 32) -> dict:
+    """Run speculative rounds (with rollbacks), then compare both caches with a one-pass forward."""
     decoder = SpeculativeDecoder(target_model, draft_model, np.random.default_rng(6304))
-    decoder.prefill(token_ids)
-    result = decoder.generate(gamma=4, max_new_tokens=8, eos_id=eos_id)
-    expected = list(token_ids) + list(result.tokens)
+    with torch.inference_mode():
+        decoder.prefill(token_ids)
+        result = decoder.generate(gamma=4, max_new_tokens=max_new_tokens, eos_id=eos_id)
+        expected = list(token_ids) + list(result.tokens)
+        pending_ok = (
+            decoder.committed == expected
+            and decoder.target.token_ids == expected[: decoder.target.seq_len]
+            and decoder.draft.token_ids == expected[: decoder.draft.seq_len]
+            and decoder.target.seq_len < len(expected)
+            and decoder.draft.seq_len < len(expected)
+        )
+        decoder.sync_caches()
     length_ok = (
-        decoder.target.token_ids == expected
+        pending_ok
+        and decoder.target.token_ids == expected
         and decoder.draft.token_ids == expected
         and cache_length(decoder.target.cache) == len(expected)
         and cache_length(decoder.draft.cache) == len(expected)
@@ -201,11 +239,17 @@ def cache_matches_full_forward(target_model, draft_model, token_ids: Sequence[in
         full = target_model(input_ids=ids, use_cache=False).logits[0, -1].float()
     cached = decoder.target.next_logits.float()
     error = float((full - cached).abs().max().cpu())
+    rounds = result.rounds
     return {
         "length_ok": length_ok,
         "next_logit_max_abs": error,
+        "target_kv_max_abs": cache_kv_max_abs(target_model, decoder.target.cache, expected),
+        "draft_kv_max_abs": cache_kv_max_abs(draft_model, decoder.draft.cache, expected),
         "generated_tokens": len(result.tokens),
         "cache_length": len(expected),
+        "rounds": len(rounds),
+        "rounds_with_rejection": sum(1 for item in rounds if item.rejected),
+        "rounds_with_bonus": sum(1 for item in rounds if item.bonus_token is not None),
     }
 
 
@@ -241,6 +285,13 @@ def isolated_forward_seconds(model, prompt_len: int, n_tokens: int, *, warmup: i
 
 
 def summarize_speculative(result, elapsed_s: float, peak_bytes: int) -> dict:
+    """Per-prompt speculative record. Every forward is counted where it happened.
+
+    Under the pending-token round structure each round makes `draft_forwards`
+    draft calls (one per proposal; the first also consumes the not-yet-cached
+    emitted tokens) and exactly one target call of `n_proposed + 1` tokens.
+    Rollback is a pair of cache crops and does no model work.
+    """
     proposed = sum(item.n_proposed for item in result.rounds)
     examined = sum(item.n_examined for item in result.rounds)
     accepted = sum(item.n_accepted for item in result.rounds)
@@ -253,19 +304,33 @@ def summarize_speculative(result, elapsed_s: float, peak_bytes: int) -> dict:
     accounted = result.prefill_s + draft_s + verify_s + decide_s + rollback_s
     host_s = max(0.0, elapsed_s - accounted)
     rounds = len(result.rounds)
-    extra_draft_forwards = sum(1 for item in result.rounds if item.bonus_token is not None or item.residual_token is not None)
+    target_passes = sum(1 for item in result.timings if item.target_input_tokens > 0)
+    decode_s = max(0.0, elapsed_s - result.prefill_s)
     return {
         "output_tokens": emitted,
+        "accepted": accepted,
+        "examined": examined,
+        "proposed": proposed,
         "accepted_over_examined": None if examined == 0 else accepted / examined,
         "accepted_over_proposed": None if proposed == 0 else accepted / proposed,
+        "rounds": rounds,
+        "mean_accepted_per_round": None if rounds == 0 else accepted / rounds,
         "mean_emitted_per_round": None if rounds == 0 else float(np.mean(emitted_per_round)),
-        "target_passes": rounds,
-        "target_passes_per_output_token": None if emitted == 0 else rounds / emitted,
-        "draft_proposal_forwards": proposed,
-        "draft_cache_forwards": extra_draft_forwards,
+        "rounds_with_rejection": sum(1 for item in result.rounds if item.rejected),
+        "rounds_with_bonus": sum(1 for item in result.rounds if item.bonus_token is not None),
+        "rounds_bonus_suppressed": sum(1 for item in result.rounds if item.suppressed_bonus),
+        "target_passes": target_passes,
+        "target_passes_per_output_token": None if emitted == 0 else target_passes / emitted,
+        "target_verify_input_tokens": sum(item.target_input_tokens for item in result.timings),
+        "draft_proposal_forwards": sum(item.draft_forwards for item in result.timings),
+        "draft_input_tokens": sum(item.draft_input_tokens for item in result.timings),
+        "draft_forwards_per_output_token": None if emitted == 0 else sum(item.draft_forwards for item in result.timings) / emitted,
         "tokens_per_second": None if elapsed_s <= 0 else emitted / elapsed_s,
+        "latency_s": elapsed_s,
         "elapsed_s": elapsed_s,
         "prefill_s": result.prefill_s,
+        "decode_s": decode_s,
+        "steady_decode_tokens_per_second": None if decode_s <= 0 else emitted / decode_s,
         "draft_proposal_s": draft_s,
         "target_verification_s": verify_s,
         "acceptance_residual_s": decide_s,
@@ -278,21 +343,30 @@ def summarize_speculative(result, elapsed_s: float, peak_bytes: int) -> dict:
 
 
 def timed_target_only(model, prompt_ids: Sequence[int], *, max_new_tokens: int, eos_id: int | None, rng, ignore_eos: bool) -> dict:
+    """Target-only sampling with the same cache convention as the speculative decoder.
+
+    The prompt minus its last token is prefilled; every decode step feeds the
+    last committed token and samples the next one, so N tokens cost N forwards.
+    """
     stop_id = None if ignore_eos else eos_id
     state = KVCacheState(model)
+    ids = [int(token) for token in prompt_ids]
     cuda_sync()
     start = time.perf_counter()
     with torch.inference_mode():
-        state.prefill(prompt_ids)
+        if len(ids) > 1:
+            state.forward_tokens(ids[:-1])
         cuda_sync()
         prefill_s = time.perf_counter() - start
         decode_start = time.perf_counter()
         tokens: list[int] = []
         hit_eos = False
+        pending = ids[-1]
         for _ in range(max_new_tokens):
+            state.forward_tokens([pending])
             token = sample_categorical(logits_to_probs(state.next_logits), rng)
             tokens.append(token)
-            state.forward_tokens([token])
+            pending = token
             if stop_id is not None and token == stop_id:
                 hit_eos = True
                 break
@@ -307,7 +381,9 @@ def timed_target_only(model, prompt_ids: Sequence[int], *, max_new_tokens: int, 
         "prefill_s": prefill_s,
         "decode_s": decode_s,
         "elapsed_s": elapsed,
+        "latency_s": elapsed,
         "tokens_per_second": None if elapsed <= 0 else len(tokens) / elapsed,
+        "steady_decode_tokens_per_second": None if decode_s <= 0 else len(tokens) / decode_s,
         "target_passes": len(tokens),
         "target_passes_per_output_token": 1.0 if tokens else None,
     }
@@ -366,21 +442,35 @@ def benchmark_prompt(
     return rows
 
 
-def estimate_speed_model(draft_model, target_model, gamma: int, prompt_lengths: Sequence[int] = (32, 128)) -> dict:
-    """Isolated c and v_gamma, then the analytical speedup at a placeholder alpha.
+ISOLATED_PROMPT_LENGTHS = (32, 128, 512)
 
-    The caller replaces alpha with the measured acceptance before reporting S_hat.
+
+def estimate_speed_model(draft_model, target_model, gamma: int, prompt_lengths: Sequence[int] = ISOLATED_PROMPT_LENGTHS) -> dict:
+    """Isolated draft step, target step and verification cost at several cache lengths.
+
+    A verification forward carries gamma + 1 tokens (the pending emitted token
+    plus gamma proposals), which is what one round of the decoder runs, so
+    v_gamma uses that width. The gamma-token width is recorded alongside.
     """
     draft_steps = [isolated_forward_seconds(draft_model, length, 1) for length in prompt_lengths]
     target_steps = [isolated_forward_seconds(target_model, length, 1) for length in prompt_lengths]
-    verifies = [isolated_forward_seconds(target_model, length, gamma) for length in prompt_lengths]
+    verifies = [isolated_forward_seconds(target_model, length, gamma + 1) for length in prompt_lengths]
+    verifies_gamma = [isolated_forward_seconds(target_model, length, gamma) for length in prompt_lengths]
     ratios = cost_ratios(float(np.mean(draft_steps)), float(np.mean(target_steps)), float(np.mean(verifies)))
+    per_length = {
+        str(length): cost_ratios(draft, target, verify)
+        for length, draft, target, verify in zip(prompt_lengths, draft_steps, target_steps, verifies)
+    }
     return {
         "gamma": gamma,
         "prompt_lengths": list(prompt_lengths),
         "draft_step_s": draft_steps,
         "target_step_s": target_steps,
         "verify_s": verifies,
+        "verify_tokens": gamma + 1,
+        "verify_gamma_tokens_s": verifies_gamma,
+        "v_gamma_tokens_only": float(np.mean(verifies_gamma)) / float(np.mean(target_steps)),
+        "per_prompt_length": per_length,
         **ratios,
     }
 
@@ -522,34 +612,85 @@ def decode_text(tokenizer, token_ids: Sequence[int]) -> str:
     return tokenizer.decode(list(token_ids), skip_special_tokens=True)
 
 
-def run_smoke() -> dict:
-    """Load both instruct models, check token ids, split-prefill, and cache length.
+FP32_GATE = 1e-3
 
-    Refuses without CUDA before any weight download.
+
+def _fp32_gate() -> float:
+    """Hard FP32 tolerance. PA4_T3_FP32_GATE may loosen it; the value used is recorded."""
+    import os
+
+    return float(os.environ.get("PA4_T3_FP32_GATE", FP32_GATE))
+
+
+def _smoke_checks(target, draft, tokenizer, token_ids: Sequence[int], probe: Sequence[int]) -> dict:
+    eos_id = None if tokenizer.eos_token_id is None else int(tokenizer.eos_token_id)
+    return {
+        "split_prefill_max_abs": split_prefill_max_abs(target, token_ids, split=17),
+        "cache": cache_matches_full_forward(target, draft, probe, eos_id, max_new_tokens=32),
+    }
+
+
+def run_smoke() -> dict:
+    """Token ids, split-prefill and cache-position consistency, in FP16 and FP32.
+
+    FP16 numbers are reported only: SDPA picks different kernels for a split
+    prefill, and FP16 logits of size ~20 round in steps of ~0.016, so gaps of a
+    few tenths are expected. The hard gate is FP32 (TF32 off): split prefill vs
+    one full forward, the cached next logits after speculative rounds with
+    rollbacks, and every cached key/value against a one-pass cache must agree
+    within PA4_T3_FP32_GATE (default 1e-3). Refuses without CUDA before any download.
     """
+    import gc
+
     from task3.src.distill import _require_cuda, load_frozen_causal
 
     _require_cuda("smoke")
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
     target, target_tokenizer = load_frozen_causal(TARGET_MODEL)
     draft, draft_tokenizer = load_frozen_causal(DRAFT_MODEL)
     assert_same_token_ids(target_tokenizer, draft_tokenizer)
     probe = render_chat(target_tokenizer, "What is 2 + 2? Reply with the integer.")
-    # A short repeated probe is enough to split a prefill without a long context.
-    token_ids = (probe * 4)[:48]
-    split_error = split_prefill_max_abs(target, token_ids, split=17)
-    eos_id = None if target_tokenizer.eos_token_id is None else int(target_tokenizer.eos_token_id)
-    cache_report = cache_matches_full_forward(target, draft, probe, eos_id)
+    long_probe = render_chat(target_tokenizer, "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?")
+    token_ids = (long_probe * 2)[:64]
+    fp16 = _smoke_checks(target, draft, target_tokenizer, token_ids, probe)
+    del target, draft
+    gc.collect()
+    torch.cuda.empty_cache()
+    target, _ = load_frozen_causal(TARGET_MODEL, dtype=torch.float32)
+    draft, _ = load_frozen_causal(DRAFT_MODEL, dtype=torch.float32)
+    fp32 = _smoke_checks(target, draft, target_tokenizer, token_ids, probe)
+    del target, draft
+    gc.collect()
+    torch.cuda.empty_cache()
+    gate = _fp32_gate()
+    fp32_errors = {
+        "split_prefill_max_abs": fp32["split_prefill_max_abs"],
+        "next_logit_max_abs": fp32["cache"]["next_logit_max_abs"],
+        "target_kv_max_abs": fp32["cache"]["target_kv_max_abs"],
+        "draft_kv_max_abs": fp32["cache"]["draft_kv_max_abs"],
+    }
+    failures = [name for name, value in fp32_errors.items() if not value < gate]
+    if not fp16["cache"]["length_ok"]:
+        failures.append("fp16_cache_length")
+    if not fp32["cache"]["length_ok"]:
+        failures.append("fp32_cache_length")
     report = {
-        "split_prefill_max_abs": split_error,
-        "cache": cache_report,
+        "fp16_diagnostic": fp16,
+        "fp32": fp32,
+        "fp32_gate": gate,
+        "fp32_gate_failures": failures,
+        "passed": not failures,
+        # Kept for older readers of smoke.json.
+        "split_prefill_max_abs": fp16["split_prefill_max_abs"],
+        "cache": fp16["cache"],
         "token_id_prompts": list(TOKEN_CHECK_PROMPTS),
         "target": TARGET_MODEL,
         "draft": DRAFT_MODEL,
     }
     _dump(results_dir() / "smoke.json", report)
-    # FP16 on T4: split-prefill abs logit gaps ~0.25 are normal; align with next_logit gate (5e-1).
-    if split_error > 5e-1 or not cache_report["length_ok"] or cache_report["next_logit_max_abs"] > 5e-1:
-        raise RuntimeError(f"smoke check failed: {report}")
+    if failures:
+        raise RuntimeError(f"smoke check failed ({failures}): {report}")
     return report
 
 

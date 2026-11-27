@@ -52,15 +52,14 @@ def sample_categorical(probs: Sequence[float] | np.ndarray, rng) -> int:
     u = float(rng.random())
     if u < 0.0:
         u = 0.0
-    last = len(probs) - 1
+    values = np.asarray(probs, dtype=np.float64)
+    last = int(values.shape[0]) - 1
     if last < 0:
         raise ValueError("cannot sample from an empty distribution")
-    acc = 0.0
-    for i in range(last):
-        acc += float(probs[i])
-        if u < acc:
-            return i
-    return last
+    # Sequential float64 cumsum, so the boundaries equal the running sum of a
+    # Python loop: the first index whose cumulative mass exceeds u.
+    cdf = np.cumsum(values[:last])
+    return int(min(np.searchsorted(cdf, u, side="right"), last))
 
 
 @dataclass(frozen=True)
@@ -424,6 +423,20 @@ def logits_to_probs(logits, temperature: float = 1.0, top_p: float = 1.0) -> np.
     return probs.cpu().numpy().astype(np.float64)
 
 
+def logits_rows_to_probs(logits, temperature: float = 1.0, top_p: float = 1.0) -> np.ndarray:
+    """Row-wise `logits_to_probs` with one device-to-host copy for the whole block."""
+    import torch
+
+    if top_p < 1.0:
+        return np.stack([logits_to_probs(row, temperature, top_p) for row in logits])
+    if temperature <= 0.0:
+        raise ValueError("temperature must be positive")
+    scores = logits.detach().float()
+    if temperature != 1.0:
+        scores = scores / temperature
+    return torch.softmax(scores, dim=-1).cpu().numpy().astype(np.float64)
+
+
 def cache_length(cache) -> int:
     if cache is None:
         return 0
@@ -437,7 +450,8 @@ class KVCacheState:
 
     `crop` uses the cache object's `crop` when the model has one. After every
     forward or rollback, `seq_len` equals both `len(token_ids)` and the cache
-    length. `next_logits` is the next-token distribution at that prefix.
+    length. `next_logits` is the next-token distribution after the last forward;
+    a crop clears it.
     """
 
     def __init__(self, model):
@@ -450,10 +464,13 @@ class KVCacheState:
     def seq_len(self) -> int:
         return len(self.token_ids)
 
-    def prefill(self, token_ids: Sequence[int]) -> None:
+    def reset(self) -> None:
         self.cache = None
         self.token_ids = []
         self.next_logits = None
+
+    def prefill(self, token_ids: Sequence[int]) -> None:
+        self.reset()
         if len(token_ids) == 0:
             raise ValueError("prefill needs at least one token")
         self.forward_tokens([int(token) for token in token_ids])
@@ -491,9 +508,7 @@ class KVCacheState:
         if length == len(self.token_ids):
             return
         if length == 0:
-            self.cache = None
-            self.token_ids = []
-            self.next_logits = None
+            self.reset()
             return
         if self.cache is None or not hasattr(self.cache, "crop"):
             raise RuntimeError("cache cannot be rolled back")
@@ -507,10 +522,7 @@ class KVCacheState:
     def align(self, final_ids: Sequence[int]) -> None:
         """Roll the cache forward or back until it equals `final_ids`."""
         final = [int(token) for token in final_ids]
-        keep = 0
-        limit = min(len(self.token_ids), len(final))
-        while keep < limit and self.token_ids[keep] == final[keep]:
-            keep += 1
+        keep = _common_prefix(self.token_ids, final)
         self.crop_to(keep)
         missing = final[keep:]
         if missing:
@@ -523,6 +535,14 @@ class KVCacheState:
             raise RuntimeError("aligned cache tokens do not equal the accepted prefix")
         if cache_length(self.cache) != len(final):
             raise RuntimeError("aligned cache length does not equal the accepted prefix")
+
+
+def _common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
+    keep = 0
+    limit = min(len(left), len(right))
+    while keep < limit and int(left[keep]) == int(right[keep]):
+        keep += 1
+    return keep
 
 
 def _module_device(model):
@@ -542,10 +562,21 @@ def _module_device(model):
 
 @dataclass(frozen=True)
 class RoundTiming:
+    """Synchronized wall time of the four round phases plus the work they did.
+
+    `draft_forwards` counts draft forward calls in the proposal phase; the first
+    one also consumes the tokens the draft cache has not seen yet (the last
+    emitted token, or the last accepted proposal plus the bonus token).
+    `target_input_tokens` is the width of the single verification forward.
+    """
+
     draft_proposal_s: float
     target_verification_s: float
     acceptance_residual_s: float
     cache_rollback_s: float
+    draft_forwards: int = 0
+    draft_input_tokens: int = 0
+    target_input_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -562,12 +593,21 @@ class SpeculativeResult:
 class SpeculativeDecoder:
     """Exact speculative sampler on two cached causal language models.
 
+    `committed` is the prompt plus every emitted token. Between rounds each
+    cache holds a prefix of `committed` that is missing at least its last token;
+    the missing tail is "pending". A round feeds the draft its pending tokens as
+    the input of the first proposal step, and feeds the target its pending token
+    followed by the proposals in one verification forward. That forward returns
+    the gamma acceptance rows and the bonus row. Rollback is a crop of each cache
+    to the longest prefix of the new `committed` minus its last token, so the
+    newly emitted token is never pushed through either model on its own.
+
     Random choices use `rng.random()`, the same inverse-CDF sampler as the
     categorical gate, so acceptance does not depend on a CUDA multinomial.
     Temperature 1 and top-p 1 leave the model softmax unchanged.
     """
 
-    def __init__(self, target_model, draft_model, rng, temperature: float = 1.0, top_p: float = 1.0):
+    def __init__(self, target_model, draft_model, rng, temperature: float = 1.0, top_p: float = 1.0, record_rows: bool = False):
         if temperature <= 0.0 or not 0.0 < top_p <= 1.0:
             raise ValueError("temperature must be positive and top_p must lie in (0, 1]")
         self.target = KVCacheState(target_model)
@@ -576,19 +616,51 @@ class SpeculativeDecoder:
         self.temperature = temperature
         self.top_p = top_p
         self.prefill_s = 0.0
+        self.committed: list[int] = []
+        self.record_rows = record_rows
+        self.row_log: list[dict] = []
 
     def prefill(self, token_ids: Sequence[int]) -> None:
+        """Cache every prompt token but the last, which the first round consumes."""
         from shared.timing import cuda_sync
 
+        ids = [int(token) for token in token_ids]
+        if not ids:
+            raise ValueError("prefill needs at least one token")
         cuda_sync()
         start = _now()
-        ids = [int(token) for token in token_ids]
-        self.target.prefill(ids)
-        self.draft.prefill(ids)
+        self.committed = list(ids)
+        self.row_log = []
+        for state in (self.target, self.draft):
+            state.reset()
+            if len(ids) > 1:
+                state.forward_tokens(ids[:-1])
         cuda_sync()
         self.prefill_s = _now() - start
-        if self.target.token_ids != ids or self.draft.token_ids != ids:
+        if self.target.token_ids != ids[:-1] or self.draft.token_ids != ids[:-1]:
             raise RuntimeError("prefill cache does not match the prompt")
+
+    def _pending(self, state: KVCacheState) -> list[int]:
+        n = state.seq_len
+        if state.token_ids != self.committed[:n]:
+            raise RuntimeError("cache tokens are not a prefix of the emitted sequence")
+        if n == len(self.committed):
+            # A synced cache: hand its last token back so it is re-read with the proposal.
+            state.crop_to(n - 1)
+            n -= 1
+        return self.committed[n:]
+
+    def sync_caches(self) -> None:
+        """Feed the pending tokens so both caches equal `committed`, with next logits."""
+        for state in (self.target, self.draft):
+            if state.token_ids != self.committed[: state.seq_len]:
+                raise RuntimeError("cache tokens are not a prefix of the emitted sequence")
+            pending = self.committed[state.seq_len :]
+            if pending:
+                state.forward_tokens(pending)
+        for state in (self.target, self.draft):
+            if state.token_ids != self.committed or cache_length(state.cache) != len(self.committed):
+                raise RuntimeError("synced cache does not equal the emitted sequence")
 
     def generate(
         self,
@@ -600,7 +672,7 @@ class SpeculativeDecoder:
         residual: str = "positive",
         ignore_eos: bool = False,
     ) -> SpeculativeResult:
-        if self.target.seq_len == 0:
+        if not self.committed:
             raise RuntimeError("call prefill before generate")
         stop_id = None if ignore_eos else eos_id
         generated: list[int] = []
@@ -630,7 +702,7 @@ class SpeculativeDecoder:
             hit_eos=hit_eos,
             length_capped=len(generated) >= max_new_tokens and not hit_eos,
             prefill_s=self.prefill_s,
-            cache_tokens=tuple(self.target.token_ids),
+            cache_tokens=tuple(self.committed),
         )
 
     def one_round(
@@ -644,39 +716,43 @@ class SpeculativeDecoder:
     ) -> tuple[Continuation, RoundTiming]:
         from shared.timing import cuda_sync
 
-        if self.target.token_ids != self.draft.token_ids:
-            raise RuntimeError("draft and target caches diverged before the round")
-        base_ids = list(self.target.token_ids)
+        base = list(self.committed)
         budget = min(gamma, max_new)
 
         cuda_sync()
         draft_start = _now()
         drafted: list[int] = []
         q_rows: list[np.ndarray] = []
+        feed = self._pending(self.draft)
+        draft_forwards = 0
+        draft_tokens = 0
         for _ in range(budget):
+            self.draft.forward_tokens(feed)
+            draft_forwards += 1
+            draft_tokens += len(feed)
             draft_probs = logits_to_probs(self.draft.next_logits, self.temperature, self.top_p)
             token = sample_categorical(draft_probs, self.rng)
             if pad_id is not None and token == pad_id:
                 break
             drafted.append(token)
             q_rows.append(draft_probs)
-            self.draft.forward_tokens([token])
             if eos_id is not None and token == eos_id:
                 break
+            feed = [token]
         cuda_sync()
         draft_s = _now() - draft_start
 
         verify_start = _now()
         bonus_row = None
+        target_tokens = 0
         if drafted:
-            first = logits_to_probs(self.target.next_logits, self.temperature, self.top_p)
-            verified = self.target.forward_tokens(drafted)
-            p_rows = [first]
-            for index in range(1, len(drafted)):
-                p_rows.append(logits_to_probs(verified[index - 1], self.temperature, self.top_p))
-            bonus_row = logits_to_probs(verified[-1], self.temperature, self.top_p)
+            pending = self._pending(self.target)
+            verified = self.target.forward_tokens(pending + drafted)
+            target_tokens = len(pending) + len(drafted)
+            rows = logits_rows_to_probs(verified[len(pending) - 1 :], self.temperature, self.top_p)
+            stacked_p = rows[:-1]
+            bonus_row = rows[-1]
             stacked_q = np.stack(q_rows)
-            stacked_p = np.stack(p_rows)
         else:
             vocab = int(self.draft.next_logits.shape[-1]) if self.draft.next_logits is not None else 1
             stacked_q = np.zeros((0, vocab))
@@ -700,14 +776,23 @@ class SpeculativeDecoder:
         decide_s = _now() - decide_start
 
         rollback_start = _now()
-        final_ids = base_ids + list(continuation.new_tokens)
-        self.target.align(final_ids)
-        self.draft.align(final_ids)
+        self.committed = base + list(continuation.new_tokens)
+        for state in (self.target, self.draft):
+            keep = min(_common_prefix(state.token_ids, self.committed), len(self.committed) - 1)
+            state.crop_to(keep)
         cuda_sync()
         rollback_s = _now() - rollback_start
-        if self.target.seq_len != len(final_ids) or self.draft.seq_len != len(final_ids):
-            raise RuntimeError("cache rollback length does not equal the accepted prefix")
-        return continuation, RoundTiming(draft_s, verify_s, decide_s, rollback_s)
+        for state in (self.target, self.draft):
+            if state.token_ids != self.committed[: state.seq_len] or state.seq_len >= len(self.committed):
+                raise RuntimeError("rollback did not leave the cache on a strict prefix of the emitted sequence")
+            if cache_length(state.cache) != state.seq_len:
+                raise RuntimeError("cache length does not equal its token ids after rollback")
+        if self.record_rows:
+            self.row_log.append(
+                {"base": base, "drafted": list(drafted), "q": stacked_q, "p": stacked_p, "bonus": bonus_row}
+            )
+        timing = RoundTiming(draft_s, verify_s, decide_s, rollback_s, draft_forwards, draft_tokens, target_tokens)
+        return continuation, timing
 
 
 def _now() -> float:
