@@ -1,0 +1,4049 @@
+{
+  "achieved_nonzero_fraction": 0.25,
+  "achieved_sparsity": 0.75,
+  "calibration_peak_allocated_bytes": 3725635072,
+  "calibration_seconds": 307.37478418499995,
+  "calibration_time_note": "shared_activation_seconds is the one Wanda/AWQ activation pass for the whole prune stage, repeated on every condition so it is not added up.",
+  "condition": "p2_s75",
+  "dense_fp16_bytes": 3087428608,
+  "family": "prune",
+  "latency": {
+    "decode_64": {
+      "execution": "dense_fp16",
+      "median_seconds": 2.2473329759995977,
+      "new_tokens": 64,
+      "peak_allocated_bytes": 3102739456,
+      "prompt_tokens_included": 16,
+      "seconds": [
+        2.2473329759995977,
+        2.2158445980003307,
+        2.218403058000149,
+        2.2523363720001726,
+        2.2728088220001155
+      ],
+      "status": "ok"
+    },
+    "execution": "dense_fp16",
+    "packed_or_sparse_kernel": false,
+    "prefill": {
+      "2048": {
+        "execution": "dense_fp16",
+        "median_seconds": 0.4539503790001618,
+        "peak_allocated_bytes": 3725635072,
+        "seconds": [
+          0.4539503790001618,
+          0.45307695800056536,
+          0.4495310269994661,
+          0.45633920799991756,
+          0.45423614800074574
+        ],
+        "status": "ok",
+        "tokens": 2048
+      },
+      "512": {
+        "execution": "dense_fp16",
+        "median_seconds": 0.10311922199980472,
+        "peak_allocated_bytes": 3254156800,
+        "seconds": [
+          0.10219608599982166,
+          0.10311922199980472,
+          0.10605851800028177,
+          0.10712349299956259,
+          0.10237657400011813
+        ],
+        "status": "ok",
+        "tokens": 512
+      }
+    },
+    "repeats": 5,
+    "warmup": 2
+  },
+  "method": "wanda",
+  "nominal_bits": null,
+  "packed_bytes": 1285909504,
+  "projections": [
+    {
+      "cols": 1536,
+      "layer": 0,
+      "module": "model.layers.0.self_attn.q_proj",
+      "mse": 1.068905199567477,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.05016196508251821,
+      "rows": 1536,
+      "score_summary": {
+        "max": 4320.824214272117,
+        "mean": 3.36433339290115,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 12.248405190008064
+      },
+      "sensitivity": 0.05016196508251821,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 0,
+      "module": "model.layers.0.self_attn.k_proj",
+      "mse": 0.17430937895551324,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.1474778606946012,
+      "rows": 256,
+      "score_summary": {
+        "max": 199.2427406162754,
+        "mean": 4.148629330284248,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.815021570759427
+      },
+      "sensitivity": 0.1474778606946012,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 0,
+      "module": "model.layers.0.self_attn.v_proj",
+      "mse": 0.017350908659864217,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.14822255382103122,
+      "rows": 256,
+      "score_summary": {
+        "max": 86.33318797682468,
+        "mean": 1.4591923711665409,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 1.7047660907305178
+      },
+      "sensitivity": 0.14822255382103122,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 0,
+      "module": "model.layers.0.self_attn.o_proj",
+      "mse": 0.007611618784721941,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.07965806530274201,
+      "rows": 1536,
+      "score_summary": {
+        "max": 91.40642101813889,
+        "mean": 0.9835718919715397,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.1472470850702385
+      },
+      "sensitivity": 0.07965806530274201,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 0,
+      "module": "model.layers.0.mlp.gate_proj",
+      "mse": 0.030387580607618606,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06633974443115326,
+      "rows": 8960,
+      "score_summary": {
+        "max": 430.78851073617795,
+        "mean": 1.698573029944083,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.160438623986025
+      },
+      "sensitivity": 0.06633974443115326,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 0,
+      "module": "model.layers.0.mlp.up_proj",
+      "mse": 0.019469412096909115,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.14899717907625157,
+      "rows": 8960,
+      "score_summary": {
+        "max": 152.40159577930822,
+        "mean": 1.387744833216564,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.3188993527930353
+      },
+      "sensitivity": 0.14899717907625157,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 0,
+      "module": "model.layers.0.mlp.down_proj",
+      "mse": 0.015262081404216588,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.13642041640391658,
+      "rows": 1536,
+      "score_summary": {
+        "max": 175.16975201088718,
+        "mean": 0.5301724553815398,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.5399898754712218
+      },
+      "sensitivity": 0.13642041640391658,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 1,
+      "module": "model.layers.1.self_attn.q_proj",
+      "mse": 0.03618339022311071,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.0691526448569633,
+      "rows": 1536,
+      "score_summary": {
+        "max": 379.3906014893606,
+        "mean": 1.8637407534557506,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 2.555775720013107
+      },
+      "sensitivity": 0.0691526448569633,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 1,
+      "module": "model.layers.1.self_attn.k_proj",
+      "mse": 0.07145852199755609,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.06730744626396146,
+      "rows": 256,
+      "score_summary": {
+        "max": 194.21185552431555,
+        "mean": 2.4986257024955227,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 3.416119040453519
+      },
+      "sensitivity": 0.06730744626396146,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 1,
+      "module": "model.layers.1.self_attn.v_proj",
+      "mse": 0.013287265173858032,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.11652698572675156,
+      "rows": 256,
+      "score_summary": {
+        "max": 67.47888168991562,
+        "mean": 1.137134444393333,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 1.144460250787494
+      },
+      "sensitivity": 0.11652698572675156,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 1,
+      "module": "model.layers.1.self_attn.o_proj",
+      "mse": 0.0024652518380510933,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.056568232198759984,
+      "rows": 1536,
+      "score_summary": {
+        "max": 73.04425965579804,
+        "mean": 0.5898251555332089,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 0.7326832812385434
+      },
+      "sensitivity": 0.056568232198759984,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 1,
+      "module": "model.layers.1.mlp.gate_proj",
+      "mse": 0.38452772668429785,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.009976746000580315,
+      "rows": 8960,
+      "score_summary": {
+        "max": 2381.191335287675,
+        "mean": 7.092274289036403,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 16.096562748331568
+      },
+      "sensitivity": 0.009976746000580315,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 1,
+      "module": "model.layers.1.mlp.up_proj",
+      "mse": 0.30453975456101556,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.05908617728984868,
+      "rows": 8960,
+      "score_summary": {
+        "max": 8934.735629751984,
+        "mean": 5.507153310822746,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 7.303454563138726
+      },
+      "sensitivity": 0.05908617728984868,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 1,
+      "module": "model.layers.1.mlp.down_proj",
+      "mse": 0.009963754176472625,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.00027543010704128606,
+      "rows": 1536,
+      "score_summary": {
+        "max": 19600.84507784514,
+        "mean": 0.5227327090683667,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 10.076977579150626
+      },
+      "sensitivity": 0.00027543010704128606,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 2,
+      "module": "model.layers.2.self_attn.q_proj",
+      "mse": 0.0784238997536401,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.08091859498435051,
+      "rows": 1536,
+      "score_summary": {
+        "max": 419.64449639375226,
+        "mean": 2.7576307704246954,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.8252947902320273
+      },
+      "sensitivity": 0.08091859498435051,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 2,
+      "module": "model.layers.2.self_attn.k_proj",
+      "mse": 0.12407150235958397,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.08151654055387883,
+      "rows": 256,
+      "score_summary": {
+        "max": 340.5115342166447,
+        "mean": 3.3644478226553356,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.4223053417106994
+      },
+      "sensitivity": 0.08151654055387883,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 2,
+      "module": "model.layers.2.self_attn.v_proj",
+      "mse": 0.045673042186535895,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.15498105327881417,
+      "rows": 256,
+      "score_summary": {
+        "max": 81.17696687499351,
+        "mean": 2.103111951565523,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 1.9430206524107265
+      },
+      "sensitivity": 0.15498105327881417,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 2,
+      "module": "model.layers.2.self_attn.o_proj",
+      "mse": 0.005350931877425562,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.18145681616431222,
+      "rows": 1536,
+      "score_summary": {
+        "max": 30.954026635006304,
+        "mean": 0.7623010256266222,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 0.6928411019832622
+      },
+      "sensitivity": 0.18145681616431222,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 2,
+      "module": "model.layers.2.mlp.gate_proj",
+      "mse": 0.2854456407683236,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.011116721426094048,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1442.3959923061336,
+        "mean": 6.270287448391767,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 13.70691318453535
+      },
+      "sensitivity": 0.011116721426094048,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 2,
+      "module": "model.layers.2.mlp.up_proj",
+      "mse": 0.18484823107719422,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.1778080792616203,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1048.8431472128739,
+        "mean": 4.33083410982802,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 4.254251616210301
+      },
+      "sensitivity": 0.1778080792616203,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 2,
+      "module": "model.layers.2.mlp.down_proj",
+      "mse": 0.020372210613762338,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.0004742503353381529,
+      "rows": 1536,
+      "score_summary": {
+        "max": 12208.599416955814,
+        "mean": 0.7103826330163846,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 8.4879836569108
+      },
+      "sensitivity": 0.0004742503353381529,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 3,
+      "module": "model.layers.3.self_attn.q_proj",
+      "mse": 0.07070552961279948,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.06037077745158582,
+      "rows": 1536,
+      "score_summary": {
+        "max": 279.9867074744896,
+        "mean": 2.7845565622310735,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.9997266048916926
+      },
+      "sensitivity": 0.06037077745158582,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 3,
+      "module": "model.layers.3.self_attn.k_proj",
+      "mse": 0.09417311963625252,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.04856600330801448,
+      "rows": 256,
+      "score_summary": {
+        "max": 388.7194094063302,
+        "mean": 3.2574316359404336,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.831304586255501
+      },
+      "sensitivity": 0.04856600330801448,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 3,
+      "module": "model.layers.3.self_attn.v_proj",
+      "mse": 0.048534934874624014,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.15052882162907288,
+      "rows": 256,
+      "score_summary": {
+        "max": 158.26758661295185,
+        "mean": 2.2381494089280882,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 2.162814948100584
+      },
+      "sensitivity": 0.15052882162907288,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 3,
+      "module": "model.layers.3.self_attn.o_proj",
+      "mse": 0.008016673673409969,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.16642229121592172,
+      "rows": 1536,
+      "score_summary": {
+        "max": 63.9211590852436,
+        "mean": 0.932569453299436,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 0.8890244786890534
+      },
+      "sensitivity": 0.16642229121592172,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 3,
+      "module": "model.layers.3.mlp.gate_proj",
+      "mse": 0.22350825241633823,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.01369876432425332,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1045.3681704441658,
+        "mean": 5.402643309706613,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 12.154123070749383
+      },
+      "sensitivity": 0.01369876432425332,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 3,
+      "module": "model.layers.3.mlp.up_proj",
+      "mse": 0.12373273244925907,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.21683615674523946,
+      "rows": 8960,
+      "score_summary": {
+        "max": 437.8037636902916,
+        "mean": 3.5555520694328737,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.1712686046921355
+      },
+      "sensitivity": 0.21683615674523946,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 3,
+      "module": "model.layers.3.mlp.down_proj",
+      "mse": 0.024751169180187087,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.11475278427404845,
+      "rows": 1536,
+      "score_summary": {
+        "max": 1332.4248341550149,
+        "mean": 0.7231022603518068,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.9762569406525955
+      },
+      "sensitivity": 0.11475278427404845,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 4,
+      "module": "model.layers.4.self_attn.q_proj",
+      "mse": 0.09185306169092655,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.08081735144779777,
+      "rows": 1536,
+      "score_summary": {
+        "max": 298.7033595033003,
+        "mean": 3.094131914193256,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.199614343813425
+      },
+      "sensitivity": 0.08081735144779777,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 4,
+      "module": "model.layers.4.self_attn.k_proj",
+      "mse": 0.1117665262427181,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.07088814001266659,
+      "rows": 256,
+      "score_summary": {
+        "max": 330.5448343742105,
+        "mean": 3.562726514491006,
+        "min": 8.037705261191793e-07,
+        "numel": 393216,
+        "std": 4.9221593651480005
+      },
+      "sensitivity": 0.07088814001266659,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 4,
+      "module": "model.layers.4.self_attn.v_proj",
+      "mse": 0.07328650215640664,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.18021831272201255,
+      "rows": 256,
+      "score_summary": {
+        "max": 205.05848127674136,
+        "mean": 2.725411322631558,
+        "min": 6.59176886499856e-08,
+        "numel": 393216,
+        "std": 2.4565868582641324
+      },
+      "sensitivity": 0.18021831272201255,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 4,
+      "module": "model.layers.4.self_attn.o_proj",
+      "mse": 0.00886063912184909,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.17786009663318605,
+      "rows": 1536,
+      "score_summary": {
+        "max": 60.66994368107801,
+        "mean": 0.9858400534788847,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 0.9417251769176651
+      },
+      "sensitivity": 0.17786009663318605,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 4,
+      "module": "model.layers.4.mlp.gate_proj",
+      "mse": 0.15704317220619746,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.02243070744508818,
+      "rows": 8960,
+      "score_summary": {
+        "max": 591.3444247690226,
+        "mean": 4.316487953282753,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 8.480972197706098
+      },
+      "sensitivity": 0.02243070744508818,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 4,
+      "module": "model.layers.4.mlp.up_proj",
+      "mse": 0.09846214119877134,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.23089723285220662,
+      "rows": 8960,
+      "score_summary": {
+        "max": 269.21252917177856,
+        "mean": 3.1442932290115673,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.6497367298469165
+      },
+      "sensitivity": 0.23089723285220662,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 4,
+      "module": "model.layers.4.mlp.down_proj",
+      "mse": 0.03979281250697871,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1831315756698072,
+      "rows": 1536,
+      "score_summary": {
+        "max": 772.0852695514578,
+        "mean": 0.8580838720036037,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.8533628830711633
+      },
+      "sensitivity": 0.1831315756698072,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 5,
+      "module": "model.layers.5.self_attn.q_proj",
+      "mse": 0.07085922515640657,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.05738166089511392,
+      "rows": 1536,
+      "score_summary": {
+        "max": 352.6611220601768,
+        "mean": 2.8382786521283965,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.272021558777924
+      },
+      "sensitivity": 0.05738166089511392,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 5,
+      "module": "model.layers.5.self_attn.k_proj",
+      "mse": 0.07451440300792456,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.04856733165081999,
+      "rows": 256,
+      "score_summary": {
+        "max": 426.19471772378813,
+        "mean": 3.0629407641383133,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 5.051459927921724
+      },
+      "sensitivity": 0.04856733165081999,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 5,
+      "module": "model.layers.5.self_attn.v_proj",
+      "mse": 0.07309334143064916,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.14979787557275706,
+      "rows": 256,
+      "score_summary": {
+        "max": 231.1055863713499,
+        "mean": 2.7049249730777394,
+        "min": 2.0295739763574164e-05,
+        "numel": 393216,
+        "std": 2.586298418470521
+      },
+      "sensitivity": 0.14979787557275706,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 5,
+      "module": "model.layers.5.self_attn.o_proj",
+      "mse": 0.009507785357224444,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.15630615812639165,
+      "rows": 1536,
+      "score_summary": {
+        "max": 105.74603683779385,
+        "mean": 1.153055560485718,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.2937601208044613
+      },
+      "sensitivity": 0.15630615812639165,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 5,
+      "module": "model.layers.5.mlp.gate_proj",
+      "mse": 0.3186616480350494,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.01753460906781251,
+      "rows": 8960,
+      "score_summary": {
+        "max": 974.3583434896898,
+        "mean": 6.20045369471385,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 11.523186497496908
+      },
+      "sensitivity": 0.01753460906781251,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 5,
+      "module": "model.layers.5.mlp.up_proj",
+      "mse": 0.1970270207950047,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.2246238758025524,
+      "rows": 8960,
+      "score_summary": {
+        "max": 530.2656220769503,
+        "mean": 4.455063634561764,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.864637734144866
+      },
+      "sensitivity": 0.2246238758025524,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 5,
+      "module": "model.layers.5.mlp.down_proj",
+      "mse": 0.028493412227059405,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.13733357557311798,
+      "rows": 1536,
+      "score_summary": {
+        "max": 946.186945321273,
+        "mean": 0.7277441959618638,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.8546934999850219
+      },
+      "sensitivity": 0.13733357557311798,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 6,
+      "module": "model.layers.6.self_attn.q_proj",
+      "mse": 0.061649457551538944,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.03536476874981718,
+      "rows": 1536,
+      "score_summary": {
+        "max": 434.89247409333706,
+        "mean": 2.6992898679744846,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 5.233362903918597
+      },
+      "sensitivity": 0.03536476874981718,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 6,
+      "module": "model.layers.6.self_attn.k_proj",
+      "mse": 0.07626573625020683,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.039559339129403896,
+      "rows": 256,
+      "score_summary": {
+        "max": 247.60301444730138,
+        "mean": 3.3060078524882752,
+        "min": 1.2007739294270315e-05,
+        "numel": 393216,
+        "std": 5.865422402291075
+      },
+      "sensitivity": 0.039559339129403896,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 6,
+      "module": "model.layers.6.self_attn.v_proj",
+      "mse": 0.04474643908906728,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.1326626221973802,
+      "rows": 256,
+      "score_summary": {
+        "max": 321.0438917598313,
+        "mean": 2.199534342778029,
+        "min": 1.7163228032010732e-05,
+        "numel": 393216,
+        "std": 2.437141290335647
+      },
+      "sensitivity": 0.1326626221973802,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 6,
+      "module": "model.layers.6.self_attn.o_proj",
+      "mse": 0.0058499402754629655,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.11268407037337022,
+      "rows": 1536,
+      "score_summary": {
+        "max": 122.10453988293723,
+        "mean": 0.8645539687095892,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.0141842607936138
+      },
+      "sensitivity": 0.11268407037337022,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 6,
+      "module": "model.layers.6.mlp.gate_proj",
+      "mse": 0.09374484441110066,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06301259651245565,
+      "rows": 8960,
+      "score_summary": {
+        "max": 494.6900236274439,
+        "mean": 3.1527830975863003,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.9193764116025416
+      },
+      "sensitivity": 0.06301259651245565,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 6,
+      "module": "model.layers.6.mlp.up_proj",
+      "mse": 0.07548676644052778,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.23969635582151602,
+      "rows": 8960,
+      "score_summary": {
+        "max": 241.97013152463683,
+        "mean": 2.760211035896958,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.283528624966352
+      },
+      "sensitivity": 0.23969635582151602,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 6,
+      "module": "model.layers.6.mlp.down_proj",
+      "mse": 0.048602182418107986,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.21537469837434162,
+      "rows": 1536,
+      "score_summary": {
+        "max": 54.778312812685265,
+        "mean": 0.9095491880018349,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.7738330193906592
+      },
+      "sensitivity": 0.21537469837434162,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 7,
+      "module": "model.layers.7.self_attn.q_proj",
+      "mse": 0.052552833377073206,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.061996019310083555,
+      "rows": 1536,
+      "score_summary": {
+        "max": 258.8847636787558,
+        "mean": 2.342571468130525,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.4628658780664447
+      },
+      "sensitivity": 0.061996019310083555,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 7,
+      "module": "model.layers.7.self_attn.k_proj",
+      "mse": 0.06567164603620768,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.04796679811621175,
+      "rows": 256,
+      "score_summary": {
+        "max": 261.422849597175,
+        "mean": 2.670614101140428,
+        "min": 1.2476325748710221e-05,
+        "numel": 393216,
+        "std": 4.230406370633956
+      },
+      "sensitivity": 0.04796679811621175,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 7,
+      "module": "model.layers.7.self_attn.v_proj",
+      "mse": 0.04603665228933096,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.12935671428075154,
+      "rows": 256,
+      "score_summary": {
+        "max": 181.473143166971,
+        "mean": 2.1625777260872376,
+        "min": 7.158657375218673e-06,
+        "numel": 393216,
+        "std": 2.2948322216108603
+      },
+      "sensitivity": 0.12935671428075154,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 7,
+      "module": "model.layers.7.self_attn.o_proj",
+      "mse": 0.010118597652763128,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.14633552612845177,
+      "rows": 1536,
+      "score_summary": {
+        "max": 193.61144482615123,
+        "mean": 1.166225685153716,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.2240865183108478
+      },
+      "sensitivity": 0.14633552612845177,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 7,
+      "module": "model.layers.7.mlp.gate_proj",
+      "mse": 0.07803475026573453,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.07490121888168401,
+      "rows": 8960,
+      "score_summary": {
+        "max": 426.67406117383536,
+        "mean": 2.868565384028604,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.3417634340132074
+      },
+      "sensitivity": 0.07490121888168401,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 7,
+      "module": "model.layers.7.mlp.up_proj",
+      "mse": 0.06933337960924421,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.22892867080345736,
+      "rows": 8960,
+      "score_summary": {
+        "max": 271.0949136148374,
+        "mean": 2.651344063507079,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.2382365757794416
+      },
+      "sensitivity": 0.22892867080345736,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 7,
+      "module": "model.layers.7.mlp.down_proj",
+      "mse": 0.04495665974294146,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.20568711681356028,
+      "rows": 1536,
+      "score_summary": {
+        "max": 143.89102120945049,
+        "mean": 0.8766850524065645,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.7536352082810469
+      },
+      "sensitivity": 0.20568711681356028,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 8,
+      "module": "model.layers.8.self_attn.q_proj",
+      "mse": 0.08832922360549371,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.07914426158669272,
+      "rows": 1536,
+      "score_summary": {
+        "max": 489.61510855356676,
+        "mean": 2.8963053150680764,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.42081826905387
+      },
+      "sensitivity": 0.07914426158669272,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 8,
+      "module": "model.layers.8.self_attn.k_proj",
+      "mse": 0.10536747123114765,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.05343386208137304,
+      "rows": 256,
+      "score_summary": {
+        "max": 290.8899464297603,
+        "mean": 3.3033721890336536,
+        "min": 8.076695653327281e-06,
+        "numel": 393216,
+        "std": 5.335199522317244
+      },
+      "sensitivity": 0.05343386208137304,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 8,
+      "module": "model.layers.8.self_attn.v_proj",
+      "mse": 0.06642614887095988,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.14030677512960374,
+      "rows": 256,
+      "score_summary": {
+        "max": 195.68735641150138,
+        "mean": 2.520747008262891,
+        "min": 1.5894469468521628e-05,
+        "numel": 393216,
+        "std": 2.412155547217585
+      },
+      "sensitivity": 0.14030677512960374,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 8,
+      "module": "model.layers.8.self_attn.o_proj",
+      "mse": 0.011610536758477489,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.18527687231241605,
+      "rows": 1536,
+      "score_summary": {
+        "max": 88.83239984328921,
+        "mean": 1.1675555917992606,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.151022588051733
+      },
+      "sensitivity": 0.18527687231241605,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 8,
+      "module": "model.layers.8.mlp.gate_proj",
+      "mse": 0.07933259925671986,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06743816055747587,
+      "rows": 8960,
+      "score_summary": {
+        "max": 384.00465973782616,
+        "mean": 2.8958142202675567,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.5181990568408574
+      },
+      "sensitivity": 0.06743816055747587,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 8,
+      "module": "model.layers.8.mlp.up_proj",
+      "mse": 0.06967430455344063,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.23440613699726914,
+      "rows": 8960,
+      "score_summary": {
+        "max": 250.380463066637,
+        "mean": 2.6478315499929894,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.200846856732041
+      },
+      "sensitivity": 0.23440613699726914,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 8,
+      "module": "model.layers.8.mlp.down_proj",
+      "mse": 0.043393219743544854,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.20700559679529784,
+      "rows": 1536,
+      "score_summary": {
+        "max": 60.569193664248864,
+        "mean": 0.8532140284216887,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.7297209277375769
+      },
+      "sensitivity": 0.20700559679529784,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 9,
+      "module": "model.layers.9.self_attn.q_proj",
+      "mse": 0.08538730101039012,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.09993026666548895,
+      "rows": 1536,
+      "score_summary": {
+        "max": 378.0593627957812,
+        "mean": 2.870504839182731,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.6264129172402066
+      },
+      "sensitivity": 0.09993026666548895,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 9,
+      "module": "model.layers.9.self_attn.k_proj",
+      "mse": 0.10102782724425197,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.05779183574059921,
+      "rows": 256,
+      "score_summary": {
+        "max": 368.58909266599125,
+        "mean": 3.2611856385241125,
+        "min": 6.011227987794414e-06,
+        "numel": 393216,
+        "std": 4.7604137683124605
+      },
+      "sensitivity": 0.05779183574059921,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 9,
+      "module": "model.layers.9.self_attn.v_proj",
+      "mse": 0.06253603403456509,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.13425655148138835,
+      "rows": 256,
+      "score_summary": {
+        "max": 214.22272052382397,
+        "mean": 2.4394834522124555,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 2.417320892213693
+      },
+      "sensitivity": 0.13425655148138835,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 9,
+      "module": "model.layers.9.self_attn.o_proj",
+      "mse": 0.01062157981020088,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.1771115879711466,
+      "rows": 1536,
+      "score_summary": {
+        "max": 157.47318886878858,
+        "mean": 1.1358634909605632,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.2019299011865734
+      },
+      "sensitivity": 0.1771115879711466,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 9,
+      "module": "model.layers.9.mlp.gate_proj",
+      "mse": 0.07088089457580021,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.07670887761466794,
+      "rows": 8960,
+      "score_summary": {
+        "max": 639.3885474740497,
+        "mean": 2.728925721410101,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.2045584374011717
+      },
+      "sensitivity": 0.07670887761466794,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 9,
+      "module": "model.layers.9.mlp.up_proj",
+      "mse": 0.06624180291380201,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.2269894711538937,
+      "rows": 8960,
+      "score_summary": {
+        "max": 172.13870092948065,
+        "mean": 2.5783150278922937,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.1480022134156136
+      },
+      "sensitivity": 0.2269894711538937,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 9,
+      "module": "model.layers.9.mlp.down_proj",
+      "mse": 0.039598388209318124,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.21104133997990276,
+      "rows": 1536,
+      "score_summary": {
+        "max": 74.1601933961202,
+        "mean": 0.8139021746371039,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.6865124146943146
+      },
+      "sensitivity": 0.21104133997990276,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 10,
+      "module": "model.layers.10.self_attn.q_proj",
+      "mse": 0.09019946710517009,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.10098042269864553,
+      "rows": 1536,
+      "score_summary": {
+        "max": 427.67162637911355,
+        "mean": 2.957174667046578,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.7983468347362384
+      },
+      "sensitivity": 0.10098042269864553,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 10,
+      "module": "model.layers.10.self_attn.k_proj",
+      "mse": 0.09216446056962013,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.05183461464073,
+      "rows": 256,
+      "score_summary": {
+        "max": 364.7481544184762,
+        "mean": 3.0916141735167684,
+        "min": 1.320908285189996e-05,
+        "numel": 393216,
+        "std": 4.883145872121793
+      },
+      "sensitivity": 0.05183461464073,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 10,
+      "module": "model.layers.10.self_attn.v_proj",
+      "mse": 0.07894568797200918,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.14397339810931623,
+      "rows": 256,
+      "score_summary": {
+        "max": 242.72808837200753,
+        "mean": 2.7472728613858233,
+        "min": 9.945352546724135e-06,
+        "numel": 393216,
+        "std": 2.548385451219026
+      },
+      "sensitivity": 0.14397339810931623,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 10,
+      "module": "model.layers.10.self_attn.o_proj",
+      "mse": 0.017420733619170885,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.22597600103851465,
+      "rows": 1536,
+      "score_summary": {
+        "max": 190.437608887874,
+        "mean": 1.460119843748154,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.5559324530760634
+      },
+      "sensitivity": 0.22597600103851465,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 10,
+      "module": "model.layers.10.mlp.gate_proj",
+      "mse": 0.06710828819445201,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06762801505589955,
+      "rows": 8960,
+      "score_summary": {
+        "max": 795.2529621060107,
+        "mean": 2.6499224707924665,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.3288918814925426
+      },
+      "sensitivity": 0.06762801505589955,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 10,
+      "module": "model.layers.10.mlp.up_proj",
+      "mse": 0.061138303577899934,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.21313889327256405,
+      "rows": 8960,
+      "score_summary": {
+        "max": 342.1997594516774,
+        "mean": 2.4850897907031926,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.1445840650434915
+      },
+      "sensitivity": 0.21313889327256405,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 10,
+      "module": "model.layers.10.mlp.down_proj",
+      "mse": 0.03496901139927407,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.2019205187714433,
+      "rows": 1536,
+      "score_summary": {
+        "max": 125.22959688436389,
+        "mean": 0.7719373756830471,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.6647507758740373
+      },
+      "sensitivity": 0.2019205187714433,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 11,
+      "module": "model.layers.11.self_attn.q_proj",
+      "mse": 0.08391236436242859,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.09112545232166169,
+      "rows": 1536,
+      "score_summary": {
+        "max": 253.18908867903897,
+        "mean": 2.7967219938589754,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.703909983397676
+      },
+      "sensitivity": 0.09112545232166169,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 11,
+      "module": "model.layers.11.self_attn.k_proj",
+      "mse": 0.10212574433535337,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.05139917251335018,
+      "rows": 256,
+      "score_summary": {
+        "max": 418.67215317514285,
+        "mean": 3.152520261656493,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.780852116460581
+      },
+      "sensitivity": 0.05139917251335018,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 11,
+      "module": "model.layers.11.self_attn.v_proj",
+      "mse": 0.06348248245194554,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.1236461202355884,
+      "rows": 256,
+      "score_summary": {
+        "max": 268.6602737982063,
+        "mean": 2.545909206086056,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 2.6816908706415234
+      },
+      "sensitivity": 0.1236461202355884,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 11,
+      "module": "model.layers.11.self_attn.o_proj",
+      "mse": 0.017650843287507694,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.15681859755254152,
+      "rows": 1536,
+      "score_summary": {
+        "max": 164.57780478676392,
+        "mean": 1.5303026828396042,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.7308509045181044
+      },
+      "sensitivity": 0.15681859755254152,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 11,
+      "module": "model.layers.11.mlp.gate_proj",
+      "mse": 0.06580470970698765,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.04962378857588233,
+      "rows": 8960,
+      "score_summary": {
+        "max": 497.02535147837983,
+        "mean": 2.6193665628847596,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.6653138742413165
+      },
+      "sensitivity": 0.04962378857588233,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 11,
+      "module": "model.layers.11.mlp.up_proj",
+      "mse": 0.05608068321432386,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.19748731320211035,
+      "rows": 8960,
+      "score_summary": {
+        "max": 252.15829433068546,
+        "mean": 2.379565613054204,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.1103885535304943
+      },
+      "sensitivity": 0.19748731320211035,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 11,
+      "module": "model.layers.11.mlp.down_proj",
+      "mse": 0.03229953224460284,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.20065714491956446,
+      "rows": 1536,
+      "score_summary": {
+        "max": 129.6051648843276,
+        "mean": 0.7407454644587257,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.6478972103689044
+      },
+      "sensitivity": 0.20065714491956446,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 12,
+      "module": "model.layers.12.self_attn.q_proj",
+      "mse": 0.10544623620808125,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.11609503949019778,
+      "rows": 1536,
+      "score_summary": {
+        "max": 289.2863575761697,
+        "mean": 3.1129072461482985,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.8351004708919243
+      },
+      "sensitivity": 0.11609503949019778,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 12,
+      "module": "model.layers.12.self_attn.k_proj",
+      "mse": 0.11397116468288004,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.06863062348943835,
+      "rows": 256,
+      "score_summary": {
+        "max": 281.82687161649324,
+        "mean": 3.3241934536103503,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.888897285323949
+      },
+      "sensitivity": 0.06863062348943835,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 12,
+      "module": "model.layers.12.self_attn.v_proj",
+      "mse": 0.0754269165918231,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.13101867474663723,
+      "rows": 256,
+      "score_summary": {
+        "max": 229.7356489006485,
+        "mean": 2.6533540178364006,
+        "min": 1.3694677458078967e-05,
+        "numel": 393216,
+        "std": 2.6263420072655714
+      },
+      "sensitivity": 0.13101867474663723,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 12,
+      "module": "model.layers.12.self_attn.o_proj",
+      "mse": 0.011317119487406066,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.19195735182636026,
+      "rows": 1536,
+      "score_summary": {
+        "max": 190.4187528673631,
+        "mean": 1.1924203192580893,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.2971411541858306
+      },
+      "sensitivity": 0.19195735182636026,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 12,
+      "module": "model.layers.12.mlp.gate_proj",
+      "mse": 0.05892245514052255,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06257668474762447,
+      "rows": 8960,
+      "score_summary": {
+        "max": 574.7014987430736,
+        "mean": 2.470736996849451,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.1949664431403204
+      },
+      "sensitivity": 0.06257668474762447,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 12,
+      "module": "model.layers.12.mlp.up_proj",
+      "mse": 0.052890913720641815,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.20224010698180833,
+      "rows": 8960,
+      "score_summary": {
+        "max": 249.83485053557607,
+        "mean": 2.31067080536199,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.0180937026809245
+      },
+      "sensitivity": 0.20224010698180833,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 12,
+      "module": "model.layers.12.mlp.down_proj",
+      "mse": 0.027873381739482284,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.19479066552229618,
+      "rows": 1536,
+      "score_summary": {
+        "max": 102.83478633364734,
+        "mean": 0.7001241049100401,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.638534130808717
+      },
+      "sensitivity": 0.19479066552229618,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 13,
+      "module": "model.layers.13.self_attn.q_proj",
+      "mse": 0.07601313789685567,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.10244808522874874,
+      "rows": 1536,
+      "score_summary": {
+        "max": 166.1265210758374,
+        "mean": 2.6964813210297467,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.189341436736064
+      },
+      "sensitivity": 0.10244808522874874,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 13,
+      "module": "model.layers.13.self_attn.k_proj",
+      "mse": 0.10455488413572311,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.06338914085603994,
+      "rows": 256,
+      "score_summary": {
+        "max": 287.783845117067,
+        "mean": 3.0837185184416884,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.306757895376019
+      },
+      "sensitivity": 0.06338914085603994,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 13,
+      "module": "model.layers.13.self_attn.v_proj",
+      "mse": 0.05676955950912088,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.11707323420479822,
+      "rows": 256,
+      "score_summary": {
+        "max": 197.63468881533518,
+        "mean": 2.280756097567365,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 2.343485596778787
+      },
+      "sensitivity": 0.11707323420479822,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 13,
+      "module": "model.layers.13.self_attn.o_proj",
+      "mse": 0.01646404651304086,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.14910325288323123,
+      "rows": 1536,
+      "score_summary": {
+        "max": 162.39855249912563,
+        "mean": 1.4110341226669185,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.4772298941666329
+      },
+      "sensitivity": 0.14910325288323123,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 13,
+      "module": "model.layers.13.mlp.gate_proj",
+      "mse": 0.05454389974474907,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.07233367498430263,
+      "rows": 8960,
+      "score_summary": {
+        "max": 349.76097708379456,
+        "mean": 2.3639598297129276,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.837233233520076
+      },
+      "sensitivity": 0.07233367498430263,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 13,
+      "module": "model.layers.13.mlp.up_proj",
+      "mse": 0.05075193526489394,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.2031684323339847,
+      "rows": 8960,
+      "score_summary": {
+        "max": 218.77724022489684,
+        "mean": 2.2585222654518704,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.9532751282740126
+      },
+      "sensitivity": 0.2031684323339847,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 13,
+      "module": "model.layers.13.mlp.down_proj",
+      "mse": 0.025120617045710485,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.21120893896122106,
+      "rows": 1536,
+      "score_summary": {
+        "max": 62.17196059981884,
+        "mean": 0.655596041829546,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.5656859149522199
+      },
+      "sensitivity": 0.21120893896122106,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 14,
+      "module": "model.layers.14.self_attn.q_proj",
+      "mse": 0.09675008120636146,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.08540421473978424,
+      "rows": 1536,
+      "score_summary": {
+        "max": 278.30110914166323,
+        "mean": 3.07742530969974,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.787944196691849
+      },
+      "sensitivity": 0.08540421473978424,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 14,
+      "module": "model.layers.14.self_attn.k_proj",
+      "mse": 0.13549616606906056,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.07228322320166976,
+      "rows": 256,
+      "score_summary": {
+        "max": 281.5184630045726,
+        "mean": 3.1456225366088755,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.887160364634972
+      },
+      "sensitivity": 0.07228322320166976,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 14,
+      "module": "model.layers.14.self_attn.v_proj",
+      "mse": 0.07668791711330414,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.12556840950255357,
+      "rows": 256,
+      "score_summary": {
+        "max": 228.4321242665675,
+        "mean": 2.766353924721496,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 2.944556499721019
+      },
+      "sensitivity": 0.12556840950255357,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 14,
+      "module": "model.layers.14.self_attn.o_proj",
+      "mse": 0.007589535457858195,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.18204814127476798,
+      "rows": 1536,
+      "score_summary": {
+        "max": 221.9043325499627,
+        "mean": 0.9990522640558877,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.1501804478206066
+      },
+      "sensitivity": 0.18204814127476798,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 14,
+      "module": "model.layers.14.mlp.gate_proj",
+      "mse": 0.05298442297748157,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.07093737697359274,
+      "rows": 8960,
+      "score_summary": {
+        "max": 521.465100561489,
+        "mean": 2.361727182283735,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.9088672984276567
+      },
+      "sensitivity": 0.07093737697359274,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 14,
+      "module": "model.layers.14.mlp.up_proj",
+      "mse": 0.05275215793933187,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.21195496902861075,
+      "rows": 8960,
+      "score_summary": {
+        "max": 229.87378960799018,
+        "mean": 2.3106025803678727,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.992104408633165
+      },
+      "sensitivity": 0.21195496902861075,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 14,
+      "module": "model.layers.14.mlp.down_proj",
+      "mse": 0.024426203531523544,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1822247244319847,
+      "rows": 1536,
+      "score_summary": {
+        "max": 59.723616103595624,
+        "mean": 0.6609041338870751,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.6121863214128389
+      },
+      "sensitivity": 0.1822247244319847,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 15,
+      "module": "model.layers.15.self_attn.q_proj",
+      "mse": 0.08035593681658308,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.01516187991051685,
+      "rows": 1536,
+      "score_summary": {
+        "max": 3905.1786525249954,
+        "mean": 2.9048566195706464,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 9.380013147466814
+      },
+      "sensitivity": 0.01516187991051685,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 15,
+      "module": "model.layers.15.self_attn.k_proj",
+      "mse": 0.07832809467799962,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.048931166410231916,
+      "rows": 256,
+      "score_summary": {
+        "max": 461.52111348022675,
+        "mean": 2.8597515093856907,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.725167019113648
+      },
+      "sensitivity": 0.048931166410231916,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 15,
+      "module": "model.layers.15.self_attn.v_proj",
+      "mse": 0.07004328817129135,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.1448365131099828,
+      "rows": 256,
+      "score_summary": {
+        "max": 138.30841061026027,
+        "mean": 2.648021853340189,
+        "min": 1.249023267449161e-05,
+        "numel": 393216,
+        "std": 2.5551438431459688
+      },
+      "sensitivity": 0.1448365131099828,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 15,
+      "module": "model.layers.15.self_attn.o_proj",
+      "mse": 0.01826594405186673,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.24912576617254834,
+      "rows": 1536,
+      "score_summary": {
+        "max": 188.7926483250633,
+        "mean": 1.5157245479151271,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.547148765591176
+      },
+      "sensitivity": 0.24912576617254834,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 15,
+      "module": "model.layers.15.mlp.gate_proj",
+      "mse": 0.04850916862487793,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.062002757843897804,
+      "rows": 8960,
+      "score_summary": {
+        "max": 409.69922225519844,
+        "mean": 2.2661176961769876,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.980630841401689
+      },
+      "sensitivity": 0.062002757843897804,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 15,
+      "module": "model.layers.15.mlp.up_proj",
+      "mse": 0.04586343914270401,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.19082706784152165,
+      "rows": 8960,
+      "score_summary": {
+        "max": 185.39462012665402,
+        "mean": 2.1631140037298096,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.9475243386561043
+      },
+      "sensitivity": 0.19082706784152165,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 15,
+      "module": "model.layers.15.mlp.down_proj",
+      "mse": 0.024080247152596712,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1910140334414641,
+      "rows": 1536,
+      "score_summary": {
+        "max": 382.1374121569616,
+        "mean": 0.6510827785003437,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.5955483801737848
+      },
+      "sensitivity": 0.1910140334414641,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 16,
+      "module": "model.layers.16.self_attn.q_proj",
+      "mse": 0.1101865687717994,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.12497871033812966,
+      "rows": 1536,
+      "score_summary": {
+        "max": 254.10750209425652,
+        "mean": 3.2485274680131977,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.843001536077189
+      },
+      "sensitivity": 0.12497871033812966,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 16,
+      "module": "model.layers.16.self_attn.k_proj",
+      "mse": 0.10938712023198605,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.057317251876117165,
+      "rows": 256,
+      "score_summary": {
+        "max": 291.4581831608336,
+        "mean": 3.2472726944674957,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 5.483090642337924
+      },
+      "sensitivity": 0.057317251876117165,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 16,
+      "module": "model.layers.16.self_attn.v_proj",
+      "mse": 0.08703173091635108,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.1466548313761509,
+      "rows": 256,
+      "score_summary": {
+        "max": 246.52504659020508,
+        "mean": 2.991896085895934,
+        "min": 1.9256613025635693e-05,
+        "numel": 393216,
+        "std": 2.9740024806982084
+      },
+      "sensitivity": 0.1466548313761509,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 16,
+      "module": "model.layers.16.self_attn.o_proj",
+      "mse": 0.015682376416710515,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.23339318382514454,
+      "rows": 1536,
+      "score_summary": {
+        "max": 170.4258848517349,
+        "mean": 1.410385309226161,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.4815244834392598
+      },
+      "sensitivity": 0.23339318382514454,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 16,
+      "module": "model.layers.16.mlp.gate_proj",
+      "mse": 0.05226331576704979,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06459759607396925,
+      "rows": 8960,
+      "score_summary": {
+        "max": 806.5890033607826,
+        "mean": 2.3806522654828695,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.1633190470275787
+      },
+      "sensitivity": 0.06459759607396925,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 16,
+      "module": "model.layers.16.mlp.up_proj",
+      "mse": 0.050978862600667134,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.19388816986383092,
+      "rows": 8960,
+      "score_summary": {
+        "max": 359.65442500602063,
+        "mean": 2.2942154168630835,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.0928741811410725
+      },
+      "sensitivity": 0.19388816986383092,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 16,
+      "module": "model.layers.16.mlp.down_proj",
+      "mse": 0.027255309745669365,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1933180871231928,
+      "rows": 1536,
+      "score_summary": {
+        "max": 194.08373010666725,
+        "mean": 0.7080626451801678,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.6533333618761389
+      },
+      "sensitivity": 0.1933180871231928,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 17,
+      "module": "model.layers.17.self_attn.q_proj",
+      "mse": 0.10322832191983859,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.11486103459620164,
+      "rows": 1536,
+      "score_summary": {
+        "max": 247.52369399078222,
+        "mean": 3.1413692774809006,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.112001826127335
+      },
+      "sensitivity": 0.11486103459620164,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 17,
+      "module": "model.layers.17.self_attn.k_proj",
+      "mse": 0.0757119560148567,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.06592436756405293,
+      "rows": 256,
+      "score_summary": {
+        "max": 312.7328385793614,
+        "mean": 2.789366605164465,
+        "min": 4.593224228357316e-07,
+        "numel": 393216,
+        "std": 4.241990862447426
+      },
+      "sensitivity": 0.06592436756405293,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 17,
+      "module": "model.layers.17.self_attn.v_proj",
+      "mse": 0.12838536757044494,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.16600580578627588,
+      "rows": 256,
+      "score_summary": {
+        "max": 260.78817689243067,
+        "mean": 3.4726548901509235,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 3.24431270090516
+      },
+      "sensitivity": 0.16600580578627588,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 17,
+      "module": "model.layers.17.self_attn.o_proj",
+      "mse": 0.013646209302047888,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.1747989489273577,
+      "rows": 1536,
+      "score_summary": {
+        "max": 145.66674853477693,
+        "mean": 1.30942037663407,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.294685784710351
+      },
+      "sensitivity": 0.1747989489273577,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 17,
+      "module": "model.layers.17.mlp.gate_proj",
+      "mse": 0.05356326443808419,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.05814634071599708,
+      "rows": 8960,
+      "score_summary": {
+        "max": 631.7789132700912,
+        "mean": 2.4350703115132974,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.449286296125925
+      },
+      "sensitivity": 0.05814634071599708,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 17,
+      "module": "model.layers.17.mlp.up_proj",
+      "mse": 0.05436843101467405,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.18078455253042924,
+      "rows": 8960,
+      "score_summary": {
+        "max": 387.00593116544854,
+        "mean": 2.382908907885983,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.2475521577010946
+      },
+      "sensitivity": 0.18078455253042924,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 17,
+      "module": "model.layers.17.mlp.down_proj",
+      "mse": 0.03664015342170993,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.18530948876995365,
+      "rows": 1536,
+      "score_summary": {
+        "max": 140.41479978631548,
+        "mean": 0.8284279794564156,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.7825928499120207
+      },
+      "sensitivity": 0.18530948876995365,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 18,
+      "module": "model.layers.18.self_attn.q_proj",
+      "mse": 0.08594360342249274,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.1067188631174277,
+      "rows": 1536,
+      "score_summary": {
+        "max": 303.08756716880424,
+        "mean": 2.8817702090910675,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 3.80358091867511
+      },
+      "sensitivity": 0.1067188631174277,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 18,
+      "module": "model.layers.18.self_attn.k_proj",
+      "mse": 0.08712710137479007,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.05975777532855306,
+      "rows": 256,
+      "score_summary": {
+        "max": 358.1943975631323,
+        "mean": 3.06034402955645,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.732799487498143
+      },
+      "sensitivity": 0.05975777532855306,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 18,
+      "module": "model.layers.18.self_attn.v_proj",
+      "mse": 0.0891975867561996,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.13321766083951803,
+      "rows": 256,
+      "score_summary": {
+        "max": 208.02828473858838,
+        "mean": 3.0008711109831183,
+        "min": 1.3539397121678097e-05,
+        "numel": 393216,
+        "std": 3.068526147404783
+      },
+      "sensitivity": 0.13321766083951803,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 18,
+      "module": "model.layers.18.self_attn.o_proj",
+      "mse": 0.019115128942454856,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.16602494601235568,
+      "rows": 1536,
+      "score_summary": {
+        "max": 171.01451800513289,
+        "mean": 1.6577790907784207,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.8145883627909378
+      },
+      "sensitivity": 0.16602494601235568,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 18,
+      "module": "model.layers.18.mlp.gate_proj",
+      "mse": 0.05694519653916359,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06131324151908628,
+      "rows": 8960,
+      "score_summary": {
+        "max": 520.2128480901978,
+        "mean": 2.5152222358774137,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.4581822511586915
+      },
+      "sensitivity": 0.06131324151908628,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 18,
+      "module": "model.layers.18.mlp.up_proj",
+      "mse": 0.05838642865419388,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.16780549100147907,
+      "rows": 8960,
+      "score_summary": {
+        "max": 305.62504825299123,
+        "mean": 2.4809818882253354,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.3955548215271123
+      },
+      "sensitivity": 0.16780549100147907,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 18,
+      "module": "model.layers.18.mlp.down_proj",
+      "mse": 0.0455031618475914,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1869096279209059,
+      "rows": 1536,
+      "score_summary": {
+        "max": 398.4836019801966,
+        "mean": 0.9270247665310838,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 0.8740361165984044
+      },
+      "sensitivity": 0.1869096279209059,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 19,
+      "module": "model.layers.19.self_attn.q_proj",
+      "mse": 0.11655373064180215,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.11769500598322952,
+      "rows": 1536,
+      "score_summary": {
+        "max": 418.10655855665937,
+        "mean": 3.371060322869839,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.280182975442492
+      },
+      "sensitivity": 0.11769500598322952,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 19,
+      "module": "model.layers.19.self_attn.k_proj",
+      "mse": 0.094815693795681,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.0652050572322532,
+      "rows": 256,
+      "score_summary": {
+        "max": 318.86692135821477,
+        "mean": 2.976996456921506,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.731865396976929
+      },
+      "sensitivity": 0.0652050572322532,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 19,
+      "module": "model.layers.19.self_attn.v_proj",
+      "mse": 0.10623775003477931,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.13487344950545455,
+      "rows": 256,
+      "score_summary": {
+        "max": 202.50316332701792,
+        "mean": 3.4344709731791476,
+        "min": 1.6891075535000908e-06,
+        "numel": 393216,
+        "std": 3.657772835168391
+      },
+      "sensitivity": 0.13487344950545455,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 19,
+      "module": "model.layers.19.self_attn.o_proj",
+      "mse": 0.018614935921505094,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.17445425303804224,
+      "rows": 1536,
+      "score_summary": {
+        "max": 81.33636001244138,
+        "mean": 1.5722870715670907,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.9345299750004115
+      },
+      "sensitivity": 0.17445425303804224,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 19,
+      "module": "model.layers.19.mlp.gate_proj",
+      "mse": 0.06274913283331053,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.052556831477085474,
+      "rows": 8960,
+      "score_summary": {
+        "max": 703.3869732905953,
+        "mean": 2.6791828750061217,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.8274113149490967
+      },
+      "sensitivity": 0.052556831477085474,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 19,
+      "module": "model.layers.19.mlp.up_proj",
+      "mse": 0.06937671708209174,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.1606205653366658,
+      "rows": 8960,
+      "score_summary": {
+        "max": 455.89896416983026,
+        "mean": 2.7120272481571464,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.6947478173788353
+      },
+      "sensitivity": 0.1606205653366658,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 19,
+      "module": "model.layers.19.mlp.down_proj",
+      "mse": 0.07581164004902045,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1624466127048475,
+      "rows": 1536,
+      "score_summary": {
+        "max": 122.9605276240442,
+        "mean": 1.2017831840537527,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.1904535586715432
+      },
+      "sensitivity": 0.1624466127048475,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 20,
+      "module": "model.layers.20.self_attn.q_proj",
+      "mse": 0.11913579516112804,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.1370667896879949,
+      "rows": 1536,
+      "score_summary": {
+        "max": 233.7112049492095,
+        "mean": 3.4522811254702663,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.009316499686526
+      },
+      "sensitivity": 0.1370667896879949,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 20,
+      "module": "model.layers.20.self_attn.k_proj",
+      "mse": 0.09317476046271622,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.059356559773590716,
+      "rows": 256,
+      "score_summary": {
+        "max": 342.2777452793358,
+        "mean": 3.351837976618096,
+        "min": 3.848072220514106e-06,
+        "numel": 393216,
+        "std": 5.636243271401856
+      },
+      "sensitivity": 0.059356559773590716,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 20,
+      "module": "model.layers.20.self_attn.v_proj",
+      "mse": 0.14254242787137628,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.14313333449782364,
+      "rows": 256,
+      "score_summary": {
+        "max": 230.03281666546457,
+        "mean": 4.418674997258697,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.736395896173384
+      },
+      "sensitivity": 0.14313333449782364,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 20,
+      "module": "model.layers.20.self_attn.o_proj",
+      "mse": 0.04069545639989277,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.18972817760536007,
+      "rows": 1536,
+      "score_summary": {
+        "max": 133.89241238797854,
+        "mean": 2.2486495878536674,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 2.457426394412648
+      },
+      "sensitivity": 0.18972817760536007,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 20,
+      "module": "model.layers.20.mlp.gate_proj",
+      "mse": 0.07372748170580183,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.06295450906772199,
+      "rows": 8960,
+      "score_summary": {
+        "max": 747.9205303662596,
+        "mean": 2.9190258103643902,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.760020461782271
+      },
+      "sensitivity": 0.06295450906772199,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 20,
+      "module": "model.layers.20.mlp.up_proj",
+      "mse": 0.08080598009484155,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.17455757317306744,
+      "rows": 8960,
+      "score_summary": {
+        "max": 589.7065720195509,
+        "mean": 2.9390499817098457,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.780128405440762
+      },
+      "sensitivity": 0.17455757317306744,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 20,
+      "module": "model.layers.20.mlp.down_proj",
+      "mse": 0.08827262713263433,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.19747319389192886,
+      "rows": 1536,
+      "score_summary": {
+        "max": 238.14582711979193,
+        "mean": 1.2779516595117346,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.1619125007899185
+      },
+      "sensitivity": 0.19747319389192886,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 21,
+      "module": "model.layers.21.self_attn.q_proj",
+      "mse": 0.1197499039893349,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.1305399458390184,
+      "rows": 1536,
+      "score_summary": {
+        "max": 190.07947610698483,
+        "mean": 3.5782493044248604,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.3125378284920775
+      },
+      "sensitivity": 0.1305399458390184,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 21,
+      "module": "model.layers.21.self_attn.k_proj",
+      "mse": 0.08759179385378957,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.06055257730234633,
+      "rows": 256,
+      "score_summary": {
+        "max": 295.96897483183176,
+        "mean": 3.3388686626808926,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 5.388362836297679
+      },
+      "sensitivity": 0.06055257730234633,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 21,
+      "module": "model.layers.21.self_attn.v_proj",
+      "mse": 0.170837614685297,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.19204692891333233,
+      "rows": 256,
+      "score_summary": {
+        "max": 170.11300889866965,
+        "mean": 4.643708591551198,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.818758851172603
+      },
+      "sensitivity": 0.19204692891333233,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 21,
+      "module": "model.layers.21.self_attn.o_proj",
+      "mse": 0.03940032647612194,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.10627743446453485,
+      "rows": 1536,
+      "score_summary": {
+        "max": 96.15094208785374,
+        "mean": 2.1000225948075713,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.9338492620711398
+      },
+      "sensitivity": 0.10627743446453485,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 21,
+      "module": "model.layers.21.mlp.gate_proj",
+      "mse": 0.09940627025706428,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.05315738982703847,
+      "rows": 8960,
+      "score_summary": {
+        "max": 697.3202429859782,
+        "mean": 3.3994415842524988,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 4.393437557854562
+      },
+      "sensitivity": 0.05315738982703847,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 21,
+      "module": "model.layers.21.mlp.up_proj",
+      "mse": 0.10962032420294625,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.15843854110666789,
+      "rows": 8960,
+      "score_summary": {
+        "max": 682.2701657992305,
+        "mean": 3.4409150882206245,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.33317876708563
+      },
+      "sensitivity": 0.15843854110666789,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 21,
+      "module": "model.layers.21.mlp.down_proj",
+      "mse": 0.13475006353110075,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.17087445855482317,
+      "rows": 1536,
+      "score_summary": {
+        "max": 158.62702127267536,
+        "mean": 1.5931506241249838,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.552072495647003
+      },
+      "sensitivity": 0.17087445855482317,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 22,
+      "module": "model.layers.22.self_attn.q_proj",
+      "mse": 0.10222219303250313,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.12353839931687859,
+      "rows": 1536,
+      "score_summary": {
+        "max": 227.60207790691152,
+        "mean": 3.361552071411868,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.213492786436397
+      },
+      "sensitivity": 0.12353839931687859,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 22,
+      "module": "model.layers.22.self_attn.k_proj",
+      "mse": 0.08821909571997821,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.058030842935291496,
+      "rows": 256,
+      "score_summary": {
+        "max": 273.6487410672693,
+        "mean": 3.4429904457411014,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 5.6534781295897725
+      },
+      "sensitivity": 0.058030842935291496,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 22,
+      "module": "model.layers.22.self_attn.v_proj",
+      "mse": 0.09984296862967312,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.10414191967476334,
+      "rows": 256,
+      "score_summary": {
+        "max": 155.41452287247074,
+        "mean": 3.722607236729061,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 4.96866968992693
+      },
+      "sensitivity": 0.10414191967476334,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 22,
+      "module": "model.layers.22.self_attn.o_proj",
+      "mse": 0.02823957505946358,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.18374781409963206,
+      "rows": 1536,
+      "score_summary": {
+        "max": 144.26512603984384,
+        "mean": 1.7777496646552713,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.7382733426141141
+      },
+      "sensitivity": 0.18374781409963206,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 22,
+      "module": "model.layers.22.mlp.gate_proj",
+      "mse": 0.11914572949920382,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.04905025113258276,
+      "rows": 8960,
+      "score_summary": {
+        "max": 584.8879147258713,
+        "mean": 3.7614615888649627,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 5.053067831319864
+      },
+      "sensitivity": 0.04905025113258276,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 22,
+      "module": "model.layers.22.mlp.up_proj",
+      "mse": 0.1263663053512573,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.15127996469274665,
+      "rows": 8960,
+      "score_summary": {
+        "max": 739.1120912456283,
+        "mean": 3.72049343287892,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.671096187587243
+      },
+      "sensitivity": 0.15127996469274665,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 22,
+      "module": "model.layers.22.mlp.down_proj",
+      "mse": 0.18471399042755365,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1593559401516768,
+      "rows": 1536,
+      "score_summary": {
+        "max": 208.82416321963456,
+        "mean": 1.8621648031243565,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 1.818393752179275
+      },
+      "sensitivity": 0.1593559401516768,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 23,
+      "module": "model.layers.23.self_attn.q_proj",
+      "mse": 0.10460326665391524,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.10733909775901179,
+      "rows": 1536,
+      "score_summary": {
+        "max": 270.57096622807063,
+        "mean": 3.4247332384469837,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.736108917211888
+      },
+      "sensitivity": 0.10733909775901179,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 23,
+      "module": "model.layers.23.self_attn.k_proj",
+      "mse": 0.0691537840757519,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.04449708308585668,
+      "rows": 256,
+      "score_summary": {
+        "max": 307.5964668698066,
+        "mean": 3.1603642835080827,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 6.0882224766517785
+      },
+      "sensitivity": 0.04449708308585668,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 23,
+      "module": "model.layers.23.self_attn.v_proj",
+      "mse": 0.10937319695949554,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.0783993179518433,
+      "rows": 256,
+      "score_summary": {
+        "max": 219.70504883840323,
+        "mean": 4.115455980665959,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 6.4537452283588115
+      },
+      "sensitivity": 0.0783993179518433,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 23,
+      "module": "model.layers.23.self_attn.o_proj",
+      "mse": 0.027479073498398066,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.08473824271093354,
+      "rows": 1536,
+      "score_summary": {
+        "max": 210.1366280609511,
+        "mean": 1.7002923677972108,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 1.6812088260867006
+      },
+      "sensitivity": 0.08473824271093354,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 23,
+      "module": "model.layers.23.mlp.gate_proj",
+      "mse": 0.13756698753152574,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.05112578014521084,
+      "rows": 8960,
+      "score_summary": {
+        "max": 790.5007856856428,
+        "mean": 4.035068863875928,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 5.458483188181911
+      },
+      "sensitivity": 0.05112578014521084,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 23,
+      "module": "model.layers.23.mlp.up_proj",
+      "mse": 0.14826788604259492,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.16804356782357832,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1353.1094529754246,
+        "mean": 4.021167655695826,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 3.8268665885601503
+      },
+      "sensitivity": 0.16804356782357832,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 23,
+      "module": "model.layers.23.mlp.down_proj",
+      "mse": 0.23019086197018623,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1538216882447055,
+      "rows": 1536,
+      "score_summary": {
+        "max": 257.7325095588482,
+        "mean": 2.086379335454417,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.064488403202163
+      },
+      "sensitivity": 0.1538216882447055,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 24,
+      "module": "model.layers.24.self_attn.q_proj",
+      "mse": 0.10218276207645734,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.11536503130680345,
+      "rows": 1536,
+      "score_summary": {
+        "max": 281.90430105485007,
+        "mean": 3.430578240016965,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.5547382656696875
+      },
+      "sensitivity": 0.11536503130680345,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 24,
+      "module": "model.layers.24.self_attn.k_proj",
+      "mse": 0.0790654739830643,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.05393616542690519,
+      "rows": 256,
+      "score_summary": {
+        "max": 291.83800136684994,
+        "mean": 3.3354696345697263,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 5.5626630524012795
+      },
+      "sensitivity": 0.05393616542690519,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 24,
+      "module": "model.layers.24.self_attn.v_proj",
+      "mse": 0.12810530071146786,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.05178404848372267,
+      "rows": 256,
+      "score_summary": {
+        "max": 259.1668254125349,
+        "mean": 5.075024741665867,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 9.297362692900489
+      },
+      "sensitivity": 0.05178404848372267,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 24,
+      "module": "model.layers.24.self_attn.o_proj",
+      "mse": 0.04635854042135179,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.11156345468730759,
+      "rows": 1536,
+      "score_summary": {
+        "max": 205.07755430589015,
+        "mean": 2.3150587125767697,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 2.217256135284927
+      },
+      "sensitivity": 0.11156345468730759,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 24,
+      "module": "model.layers.24.mlp.gate_proj",
+      "mse": 0.15612431381429945,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.062450788545815726,
+      "rows": 8960,
+      "score_summary": {
+        "max": 860.9266112769908,
+        "mean": 4.244639674822282,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 5.557367721085359
+      },
+      "sensitivity": 0.062450788545815726,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 24,
+      "module": "model.layers.24.mlp.up_proj",
+      "mse": 0.17306466826370784,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.1746223853380344,
+      "rows": 8960,
+      "score_summary": {
+        "max": 676.4423374319214,
+        "mean": 4.315011108410644,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 4.027409225671415
+      },
+      "sensitivity": 0.1746223853380344,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 24,
+      "module": "model.layers.24.mlp.down_proj",
+      "mse": 0.2871913916120927,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.1491533686375234,
+      "rows": 1536,
+      "score_summary": {
+        "max": 503.7255204480593,
+        "mean": 2.3226059494991276,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.324267000507083
+      },
+      "sensitivity": 0.1491533686375234,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 25,
+      "module": "model.layers.25.self_attn.q_proj",
+      "mse": 0.07838628130654494,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.1071199382535452,
+      "rows": 1536,
+      "score_summary": {
+        "max": 286.7647553621725,
+        "mean": 3.0920229990504855,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.189237762099905
+      },
+      "sensitivity": 0.1071199382535452,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 25,
+      "module": "model.layers.25.self_attn.k_proj",
+      "mse": 0.04037033871281892,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.03380353880728242,
+      "rows": 256,
+      "score_summary": {
+        "max": 227.7437294663146,
+        "mean": 2.899515542237759,
+        "min": 9.8468612270806e-09,
+        "numel": 393216,
+        "std": 5.66647970330131
+      },
+      "sensitivity": 0.03380353880728242,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 25,
+      "module": "model.layers.25.self_attn.v_proj",
+      "mse": 0.07352671935223043,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.020706340397735945,
+      "rows": 256,
+      "score_summary": {
+        "max": 241.40854826947333,
+        "mean": 5.177566953682999,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 11.53360049923243
+      },
+      "sensitivity": 0.020706340397735945,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 25,
+      "module": "model.layers.25.self_attn.o_proj",
+      "mse": 0.03830342344008386,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.052294795722473635,
+      "rows": 1536,
+      "score_summary": {
+        "max": 237.18379082006635,
+        "mean": 2.1124135473660903,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 2.7658228364100355
+      },
+      "sensitivity": 0.052294795722473635,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 25,
+      "module": "model.layers.25.mlp.gate_proj",
+      "mse": 0.15715582200459072,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.07970843337177531,
+      "rows": 8960,
+      "score_summary": {
+        "max": 974.5741329325106,
+        "mean": 4.231606890622821,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 5.132051766407127
+      },
+      "sensitivity": 0.07970843337177531,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 25,
+      "module": "model.layers.25.mlp.up_proj",
+      "mse": 0.18552347932543073,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.17157394116561145,
+      "rows": 8960,
+      "score_summary": {
+        "max": 775.3910984645522,
+        "mean": 4.474183865820573,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 4.213145584660887
+      },
+      "sensitivity": 0.17157394116561145,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 25,
+      "module": "model.layers.25.mlp.down_proj",
+      "mse": 0.3775811872134606,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.16089215150746,
+      "rows": 1536,
+      "score_summary": {
+        "max": 976.1946198330616,
+        "mean": 2.65237066142363,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 2.6032388337510977
+      },
+      "sensitivity": 0.16089215150746,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 26,
+      "module": "model.layers.26.self_attn.q_proj",
+      "mse": 0.04884017825437089,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.06082756837282591,
+      "rows": 1536,
+      "score_summary": {
+        "max": 367.6745781940875,
+        "mean": 2.6198400037951317,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.7832854855277445
+      },
+      "sensitivity": 0.06082756837282591,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 26,
+      "module": "model.layers.26.self_attn.k_proj",
+      "mse": 0.028704152791760862,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.02586700858569329,
+      "rows": 256,
+      "score_summary": {
+        "max": 240.4790484404572,
+        "mean": 2.472815478772568,
+        "min": 9.07305036100186e-06,
+        "numel": 393216,
+        "std": 5.569031036650846
+      },
+      "sensitivity": 0.02586700858569329,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 26,
+      "module": "model.layers.26.self_attn.v_proj",
+      "mse": 0.12472723051905632,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.022523271119599383,
+      "rows": 256,
+      "score_summary": {
+        "max": 200.44388500448275,
+        "mean": 6.807303426566119,
+        "min": 1.692016949771881e-05,
+        "numel": 393216,
+        "std": 14.320929054258295
+      },
+      "sensitivity": 0.022523271119599383,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 26,
+      "module": "model.layers.26.self_attn.o_proj",
+      "mse": 0.07017014346395929,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.056641089732713125,
+      "rows": 1536,
+      "score_summary": {
+        "max": 353.0921555968088,
+        "mean": 2.6987518893974225,
+        "min": 1.1467591503446748e-05,
+        "numel": 2359296,
+        "std": 2.4675268238064363
+      },
+      "sensitivity": 0.056641089732713125,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 26,
+      "module": "model.layers.26.mlp.gate_proj",
+      "mse": 0.15367436834744044,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.08687504248177694,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1201.0496590495065,
+        "mean": 4.121412342062736,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 4.939406071621156
+      },
+      "sensitivity": 0.08687504248177694,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 26,
+      "module": "model.layers.26.mlp.up_proj",
+      "mse": 0.18979882214750562,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.1526127197456994,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1033.3052932604694,
+        "mean": 4.477057363253317,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 4.4241980357783826
+      },
+      "sensitivity": 0.1526127197456994,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 26,
+      "module": "model.layers.26.mlp.down_proj",
+      "mse": 0.48529428367813426,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.0028664245309565003,
+      "rows": 1536,
+      "score_summary": {
+        "max": 30358.470619840722,
+        "mean": 3.1199788873706065,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 18.86493897992323
+      },
+      "sensitivity": 0.0028664245309565003,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 27,
+      "module": "model.layers.27.self_attn.q_proj",
+      "mse": 0.0464893764971445,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "q_proj",
+      "relative_mse": 0.056856954326812814,
+      "rows": 1536,
+      "score_summary": {
+        "max": 320.71028954331115,
+        "mean": 2.5654559665449077,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 4.769887007935913
+      },
+      "sensitivity": 0.056856954326812814,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 27,
+      "module": "model.layers.27.self_attn.k_proj",
+      "mse": 0.02427776699187234,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "k_proj",
+      "relative_mse": 0.0236662961271165,
+      "rows": 256,
+      "score_summary": {
+        "max": 235.6530845680621,
+        "mean": 2.2479688780484217,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 5.482357604506998
+      },
+      "sensitivity": 0.0236662961271165,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 27,
+      "module": "model.layers.27.self_attn.v_proj",
+      "mse": 0.1143943564966321,
+      "nonzero": 98304,
+      "numel": 393216,
+      "projection": "v_proj",
+      "relative_mse": 0.02129106982199844,
+      "rows": 256,
+      "score_summary": {
+        "max": 218.42236970166934,
+        "mean": 6.57755623034512,
+        "min": 0.0,
+        "numel": 393216,
+        "std": 14.076079396834338
+      },
+      "sensitivity": 0.02129106982199844,
+      "zeros": 294912
+    },
+    {
+      "cols": 1536,
+      "layer": 27,
+      "module": "model.layers.27.self_attn.o_proj",
+      "mse": 0.16227344113091627,
+      "nonzero": 589824,
+      "numel": 2359296,
+      "projection": "o_proj",
+      "relative_mse": 0.06405211651231509,
+      "rows": 1536,
+      "score_summary": {
+        "max": 546.8719178715364,
+        "mean": 4.180143490782319,
+        "min": 0.0,
+        "numel": 2359296,
+        "std": 5.135011629775297
+      },
+      "sensitivity": 0.06405211651231509,
+      "zeros": 1769472
+    },
+    {
+      "cols": 1536,
+      "layer": 27,
+      "module": "model.layers.27.mlp.gate_proj",
+      "mse": 0.23352720482008799,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "gate_proj",
+      "relative_mse": 0.0479833322028683,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1349.533317277603,
+        "mean": 4.876157596079345,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 7.175301183312446
+      },
+      "sensitivity": 0.0479833322028683,
+      "zeros": 10321920
+    },
+    {
+      "cols": 1536,
+      "layer": 27,
+      "module": "model.layers.27.mlp.up_proj",
+      "mse": 0.23152130671909876,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "up_proj",
+      "relative_mse": 0.0954385239351633,
+      "rows": 8960,
+      "score_summary": {
+        "max": 1669.877084510165,
+        "mean": 4.824619556764602,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 5.582900238250577
+      },
+      "sensitivity": 0.0954385239351633,
+      "zeros": 10321920
+    },
+    {
+      "cols": 8960,
+      "layer": 27,
+      "module": "model.layers.27.mlp.down_proj",
+      "mse": 0.5489589348435402,
+      "nonzero": 3440640,
+      "numel": 13762560,
+      "projection": "down_proj",
+      "relative_mse": 0.014870426831073227,
+      "rows": 1536,
+      "score_summary": {
+        "max": 5652.277946962568,
+        "mean": 3.2010574133684084,
+        "min": 0.0,
+        "numel": 13762560,
+        "std": 6.799031105198347
+      },
+      "sensitivity": 0.014870426831073227,
+      "zeros": 10321920
+    }
+  ],
+  "quality": {
+    "c4_validation": {
+      "mean_nll": 10.854371452026367,
+      "n_tokens": 50000,
+      "n_windows": 177,
+      "nll_sum": 542718.5726013184,
+      "perplexity": 51759.9235428545
+    },
+    "hellaswag": {
+      "acc_norm": 0.3125,
+      "accuracy": 0.27734375,
+      "n_examples": 512,
+      "subset": "diagnostic_512"
+    },
+    "protocol": "Locked Rowan/hellaswag validation examples. The query is preprocess(activity_label + ': ' + ctx_a + ' ' + ctx_b.capitalize()), and each choice is preprocess(ending), using the lm-evaluation-harness bracket cleanup. The score is the conditional token log-likelihood of the choice given the query. acc_norm divides by the character length of the preprocessed choice, not by token count.",
+    "wikitext": {
+      "mean_nll": 11.066178710479736,
+      "n_tokens": 50000,
+      "n_windows": 437,
+      "nll_sum": 553308.9355239868,
+      "perplexity": 63970.58904074627
+    }
+  },
+  "recipe": {
+    "family": "prune",
+    "method": "wanda",
+    "sparsity": 0.75,
+    "tau": null
+  },
+  "runtime": {
+    "attn_implementation": "sdpa",
+    "data_repo": "https://github.com/AbDu11aHHH/atml-pa4-datasets.git",
+    "data_repo_commit": "6a0a9ec9da7ef3d313ee3036cfec493886723644",
+    "device": "cuda",
+    "dtype": "float16",
+    "execution": "dense_fp16",
+    "group_size": 128,
+    "hidden_size": 1536,
+    "intermediate_size": 8960,
+    "model_id": "Qwen/Qwen2.5-1.5B",
+    "num_hidden_layers": 28,
+    "packed_kernel": false,
+    "seed": 6304,
+    "tie_word_embeddings": true,
+    "torch": "2.11.0+cu130",
+    "transformers": "4.57.1",
+    "vocab_size": 151936
+  },
+  "shared_activation_seconds": 16.518201161999997,
+  "sparsity_target": 0.75,
+  "storage": {
+    "dense_fp16_bytes": 3087428608,
+    "eligible_sparse_bytes": 818872320,
+    "excluded_fp16_bytes": 467037184,
+    "mask_bits": 1310195712,
+    "nonzero_value_bits": 5240782848,
+    "padding_bits": 0,
+    "unstructured_sparse_bytes": 1285909504
+  },
+  "storage_note": "packed_bytes is the unstructured mask-bit plus 16-bit-nonzero estimate. Latency is a dense FP16 forward of the explicit zeros.",
+  "tau": null,
+  "unique_calibration_seconds": 290.856583023,
+  "unstructured_sparse_bytes": 1285909504
+}
