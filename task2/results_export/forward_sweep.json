@@ -1,0 +1,321 @@
+{
+  "rows": [
+    {
+      "kind": "dense",
+      "length": 256,
+      "batch": 1,
+      "storage": "full causal scores",
+      "status": "ok",
+      "seconds_mean": 0.0022525233333302217,
+      "seconds_samples": [
+        0.0022581380000019635,
+        0.0022188899999946443,
+        0.002280541999994057
+      ],
+      "peak_allocated_bytes": 27344896,
+      "peak_reserved_bytes": 211812352,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "dense",
+      "length": 1024,
+      "batch": 1,
+      "storage": "full causal scores",
+      "status": "ok",
+      "seconds_mean": 0.006615642666664219,
+      "seconds_samples": [
+        0.006637842999907662,
+        0.006576296000048387,
+        0.00663278900003661
+      ],
+      "peak_allocated_bytes": 144753664,
+      "peak_reserved_bytes": 174063616,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "dense",
+      "length": 4096,
+      "batch": 1,
+      "storage": "full causal scores",
+      "status": "ok",
+      "seconds_mean": 0.08926665699993919,
+      "seconds_samples": [
+        0.08926665699993919
+      ],
+      "peak_allocated_bytes": 1994576896,
+      "peak_reserved_bytes": 2206203904,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "dense",
+      "length": 8192,
+      "batch": 1,
+      "storage": "full causal scores",
+      "status": "ok",
+      "seconds_mean": 0.3574662270000317,
+      "seconds_samples": [
+        0.3574662270000317
+      ],
+      "peak_allocated_bytes": 7896142848,
+      "peak_reserved_bytes": 8665432064,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "window",
+      "length": 256,
+      "batch": 1,
+      "storage": "dense boolean window mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.002187831666674356,
+      "seconds_samples": [
+        0.0021344870000348237,
+        0.0021499129999256184,
+        0.0022790950000626253
+      ],
+      "peak_allocated_bytes": 27344896,
+      "peak_reserved_bytes": 8665432064,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "window",
+      "length": 1024,
+      "batch": 1,
+      "storage": "dense boolean window mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.006758301333282664,
+      "seconds_samples": [
+        0.006799974999921687,
+        0.006701445999965472,
+        0.006773482999960834
+      ],
+      "peak_allocated_bytes": 144753664,
+      "peak_reserved_bytes": 176160768,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "window",
+      "length": 4096,
+      "batch": 1,
+      "storage": "dense boolean window mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.0901005629999645,
+      "seconds_samples": [
+        0.0901005629999645
+      ],
+      "peak_allocated_bytes": 1994576896,
+      "peak_reserved_bytes": 2187329536,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "window",
+      "length": 8192,
+      "batch": 1,
+      "storage": "dense boolean window mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.3612445359999583,
+      "seconds_samples": [
+        0.3612445359999583
+      ],
+      "peak_allocated_bytes": 7896142848,
+      "peak_reserved_bytes": 8602517504,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "mixed",
+      "length": 256,
+      "batch": 1,
+      "storage": "dense boolean per-head mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.008736832333321823,
+      "seconds_samples": [
+        0.008769068999981755,
+        0.008623540000030516,
+        0.0088178879999532
+      ],
+      "peak_allocated_bytes": 27541504,
+      "peak_reserved_bytes": 8602517504,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "mixed",
+      "length": 1024,
+      "batch": 1,
+      "storage": "dense boolean per-head mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.013306777666684866,
+      "seconds_samples": [
+        0.013432984000019133,
+        0.013188443999979427,
+        0.013298905000056038
+      ],
+      "peak_allocated_bytes": 147899392,
+      "peak_reserved_bytes": 176160768,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "mixed",
+      "length": 4096,
+      "batch": 1,
+      "storage": "dense boolean per-head mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.09899739200000113,
+      "seconds_samples": [
+        0.09899739200000113
+      ],
+      "peak_allocated_bytes": 2044908544,
+      "peak_reserved_bytes": 2311061504,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "mixed",
+      "length": 8192,
+      "batch": 1,
+      "storage": "dense boolean per-head mask, not a sparse kernel",
+      "status": "ok",
+      "seconds_mean": 0.3769210259999909,
+      "seconds_samples": [
+        0.3769210259999909
+      ],
+      "peak_allocated_bytes": 8097469440,
+      "peak_reserved_bytes": 9126805504,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "linear",
+      "length": 256,
+      "batch": 1,
+      "storage": "inclusive prefix state (B, H, L, D, D), not an LxL score matrix",
+      "status": "ok",
+      "seconds_mean": 0.0016647603333315903,
+      "seconds_samples": [
+        0.0018290930000830485,
+        0.0015706019999015552,
+        0.0015945860000101675
+      ],
+      "peak_allocated_bytes": 32513024,
+      "peak_reserved_bytes": 9126805504,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "linear",
+      "length": 1024,
+      "batch": 1,
+      "storage": "inclusive prefix state (B, H, L, D, D), not an LxL score matrix",
+      "status": "ok",
+      "seconds_mean": 0.0027884959999937564,
+      "seconds_samples": [
+        0.002846477999923991,
+        0.0027239150000468726,
+        0.002795095000010406
+      ],
+      "peak_allocated_bytes": 73413632,
+      "peak_reserved_bytes": 113246208,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "linear",
+      "length": 4096,
+      "batch": 1,
+      "storage": "inclusive prefix state (B, H, L, D, D), not an LxL score matrix",
+      "status": "ok",
+      "seconds_mean": 0.01018973800000822,
+      "seconds_samples": [
+        0.01018973800000822
+      ],
+      "peak_allocated_bytes": 237016064,
+      "peak_reserved_bytes": 257949696,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "linear",
+      "length": 8192,
+      "batch": 1,
+      "storage": "inclusive prefix state (B, H, L, D, D), not an LxL score matrix",
+      "status": "ok",
+      "seconds_mean": 0.021289261999982045,
+      "seconds_samples": [
+        0.021289261999982045
+      ],
+      "peak_allocated_bytes": 455152640,
+      "peak_reserved_bytes": 486539264,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "gated",
+      "length": 256,
+      "batch": 1,
+      "storage": "sequential forget-gate scan; persistent state matches ungated linear",
+      "status": "ok",
+      "seconds_mean": 0.14461181866662778,
+      "seconds_samples": [
+        0.1430306649999693,
+        0.143112897999913,
+        0.14769189300000107
+      ],
+      "peak_allocated_bytes": 20325376,
+      "peak_reserved_bytes": 486539264,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "gated",
+      "length": 1024,
+      "batch": 1,
+      "storage": "sequential forget-gate scan; persistent state matches ungated linear",
+      "status": "ok",
+      "seconds_mean": 0.5917473223333521,
+      "seconds_samples": [
+        0.5792963689999624,
+        0.5871017890000303,
+        0.6088438090000636
+      ],
+      "peak_allocated_bytes": 24656896,
+      "peak_reserved_bytes": 48234496,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "gated",
+      "length": 4096,
+      "batch": 1,
+      "storage": "sequential forget-gate scan; persistent state matches ungated linear",
+      "status": "ok",
+      "seconds_mean": 2.305005741000059,
+      "seconds_samples": [
+        2.305005741000059
+      ],
+      "peak_allocated_bytes": 41982976,
+      "peak_reserved_bytes": 69206016,
+      "memory_note": "cuda"
+    },
+    {
+      "kind": "gated",
+      "length": 8192,
+      "batch": 1,
+      "storage": "sequential forget-gate scan; persistent state matches ungated linear",
+      "status": "ok",
+      "seconds_mean": 4.595149591999984,
+      "seconds_samples": [
+        4.595149591999984
+      ],
+      "peak_allocated_bytes": 65084416,
+      "peak_reserved_bytes": 90177536,
+      "memory_note": "cuda"
+    }
+  ],
+  "theory_at_256": {
+    "length": 256,
+    "dense_pairs_per_layer": 131584,
+    "window_pairs_per_layer": 57472,
+    "mixed_pairs_per_layer": 45376,
+    "dilated_offsets": 64,
+    "window_mask_bytes": 65536,
+    "mixed_mask_bytes": 262144,
+    "mask_storage": "dense_bool",
+    "linear_state_bytes": 33792,
+    "gated_state_bytes": 33792,
+    "dense_kv_cache_fp32_bytes": 524288,
+    "linear_prefix_bytes_batch1": 4194304,
+    "receptive_field": 126,
+    "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+  },
+  "scale": 0.17677669529663687
+}

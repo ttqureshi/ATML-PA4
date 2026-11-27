@@ -1,0 +1,319 @@
+{
+  "job": "mixed_K4_mixed_seed6306",
+  "kind": "mixed",
+  "K": 4,
+  "regime": "mixed",
+  "seed": 6306,
+  "updates": 4500,
+  "checkpoint": "/kaggle/working/ATML-PA4/checkpoints/task2/mixed_K4_mixed_seed6306.pt",
+  "learning_curve": [
+    {
+      "update": 500,
+      "lr": 0.0007525581395348837,
+      "train_loss": 4.36719266796112,
+      "development": {
+        "accuracy": 0.02734375,
+        "n_queries": 3072,
+        "by_regime": {
+          "near": {
+            "accuracy": 0.0419921875,
+            "n": 1024
+          },
+          "far": {
+            "accuracy": 0.017578125,
+            "n": 1024
+          },
+          "mixed": {
+            "accuracy": 0.0224609375,
+            "n": 1024
+          }
+        },
+        "by_bin": {
+          "[0,32)": {
+            "accuracy": 0.04258943781942078,
+            "n": 587
+          },
+          "[32,64)": {
+            "accuracy": 0.0391304347826087,
+            "n": 690
+          },
+          "[64,128)": {
+            "accuracy": 0.02867383512544803,
+            "n": 279
+          },
+          "[128,256)": {
+            "accuracy": 0.0158311345646438,
+            "n": 1516
+          }
+        },
+        "chance_uniform_vocab": 0.015625,
+        "chance_within_example": 0.25,
+        "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+      }
+    },
+    {
+      "update": 1000,
+      "lr": 0.0006734883720930232,
+      "train_loss": 3.289662687301636,
+      "development": {
+        "accuracy": 0.2630208333333333,
+        "n_queries": 3072,
+        "by_regime": {
+          "near": {
+            "accuracy": 0.271484375,
+            "n": 1024
+          },
+          "far": {
+            "accuracy": 0.2685546875,
+            "n": 1024
+          },
+          "mixed": {
+            "accuracy": 0.2490234375,
+            "n": 1024
+          }
+        },
+        "by_bin": {
+          "[0,32)": {
+            "accuracy": 0.2879045996592845,
+            "n": 587
+          },
+          "[32,64)": {
+            "accuracy": 0.26666666666666666,
+            "n": 690
+          },
+          "[64,128)": {
+            "accuracy": 0.2078853046594982,
+            "n": 279
+          },
+          "[128,256)": {
+            "accuracy": 0.26187335092348285,
+            "n": 1516
+          }
+        },
+        "chance_uniform_vocab": 0.015625,
+        "chance_within_example": 0.25,
+        "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+      }
+    },
+    {
+      "update": 1500,
+      "lr": 0.0005944186046511629,
+      "train_loss": 2.151966426372528,
+      "development": {
+        "accuracy": 0.25,
+        "n_queries": 3072,
+        "by_regime": {
+          "near": {
+            "accuracy": 0.2529296875,
+            "n": 1024
+          },
+          "far": {
+            "accuracy": 0.2421875,
+            "n": 1024
+          },
+          "mixed": {
+            "accuracy": 0.2548828125,
+            "n": 1024
+          }
+        },
+        "by_bin": {
+          "[0,32)": {
+            "accuracy": 0.24701873935264054,
+            "n": 587
+          },
+          "[32,64)": {
+            "accuracy": 0.2579710144927536,
+            "n": 690
+          },
+          "[64,128)": {
+            "accuracy": 0.21505376344086022,
+            "n": 279
+          },
+          "[128,256)": {
+            "accuracy": 0.25395778364116095,
+            "n": 1516
+          }
+        },
+        "chance_uniform_vocab": 0.015625,
+        "chance_within_example": 0.25,
+        "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+      }
+    },
+    {
+      "update": 2000,
+      "lr": 0.0005153488372093023,
+      "train_loss": 1.8576844036579132,
+      "development": {
+        "accuracy": 0.2669270833333333,
+        "n_queries": 3072,
+        "by_regime": {
+          "near": {
+            "accuracy": 0.275390625,
+            "n": 1024
+          },
+          "far": {
+            "accuracy": 0.25,
+            "n": 1024
+          },
+          "mixed": {
+            "accuracy": 0.275390625,
+            "n": 1024
+          }
+        },
+        "by_bin": {
+          "[0,32)": {
+            "accuracy": 0.28620102214650767,
+            "n": 587
+          },
+          "[32,64)": {
+            "accuracy": 0.27391304347826084,
+            "n": 690
+          },
+          "[64,128)": {
+            "accuracy": 0.25089605734767023,
+            "n": 279
+          },
+          "[128,256)": {
+            "accuracy": 0.25923482849604224,
+            "n": 1516
+          }
+        },
+        "chance_uniform_vocab": 0.015625,
+        "chance_within_example": 0.25,
+        "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+      }
+    },
+    {
+      "update": 3000,
+      "lr": 0.0003572093023255814,
+      "train_loss": 1.682910925388336,
+      "development": {
+        "accuracy": 0.2633463541666667,
+        "n_queries": 3072,
+        "by_regime": {
+          "near": {
+            "accuracy": 0.27734375,
+            "n": 1024
+          },
+          "far": {
+            "accuracy": 0.25390625,
+            "n": 1024
+          },
+          "mixed": {
+            "accuracy": 0.2587890625,
+            "n": 1024
+          }
+        },
+        "by_bin": {
+          "[0,32)": {
+            "accuracy": 0.2453151618398637,
+            "n": 587
+          },
+          "[32,64)": {
+            "accuracy": 0.3,
+            "n": 690
+          },
+          "[64,128)": {
+            "accuracy": 0.23297491039426524,
+            "n": 279
+          },
+          "[128,256)": {
+            "accuracy": 0.25923482849604224,
+            "n": 1516
+          }
+        },
+        "chance_uniform_vocab": 0.015625,
+        "chance_within_example": 0.25,
+        "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+      }
+    },
+    {
+      "update": 4500,
+      "lr": 0.00011999999999999999,
+      "train_loss": 1.5496982343991597,
+      "development": {
+        "accuracy": 0.2916666666666667,
+        "n_queries": 3072,
+        "by_regime": {
+          "near": {
+            "accuracy": 0.2998046875,
+            "n": 1024
+          },
+          "far": {
+            "accuracy": 0.2939453125,
+            "n": 1024
+          },
+          "mixed": {
+            "accuracy": 0.28125,
+            "n": 1024
+          }
+        },
+        "by_bin": {
+          "[0,32)": {
+            "accuracy": 0.32538330494037476,
+            "n": 587
+          },
+          "[32,64)": {
+            "accuracy": 0.2855072463768116,
+            "n": 690
+          },
+          "[64,128)": {
+            "accuracy": 0.2616487455197133,
+            "n": 279
+          },
+          "[128,256)": {
+            "accuracy": 0.2869393139841689,
+            "n": 1516
+          }
+        },
+        "chance_uniform_vocab": 0.015625,
+        "chance_within_example": 0.25,
+        "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+      }
+    }
+  ],
+  "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction.",
+  "development_note": "Development accuracy describes this fixed run. It is not used to change the pre-registered forget gate.",
+  "test": {
+    "accuracy": 0.2925618489583333,
+    "n_queries": 12288,
+    "by_regime": {
+      "near": {
+        "accuracy": 0.310302734375,
+        "n": 4096
+      },
+      "far": {
+        "accuracy": 0.281494140625,
+        "n": 4096
+      },
+      "mixed": {
+        "accuracy": 0.285888671875,
+        "n": 4096
+      }
+    },
+    "by_bin": {
+      "[0,32)": {
+        "accuracy": 0.30779392338177014,
+        "n": 2271
+      },
+      "[32,64)": {
+        "accuracy": 0.3096590909090909,
+        "n": 2816
+      },
+      "[64,128)": {
+        "accuracy": 0.28844317096466093,
+        "n": 1047
+      },
+      "[128,256)": {
+        "accuracy": 0.27981800454988626,
+        "n": 6154
+      }
+    },
+    "chance_uniform_vocab": 0.015625,
+    "chance_within_example": 0.25,
+    "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction.",
+    "split": "test",
+    "K": 4,
+    "regime_filter": null
+  }
+}

@@ -1,0 +1,155 @@
+{
+  "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction.",
+  "theory_T256": {
+    "length": 256,
+    "dense_pairs_per_layer": 131584,
+    "window_pairs_per_layer": 57472,
+    "mixed_pairs_per_layer": 45376,
+    "dilated_offsets": 64,
+    "window_mask_bytes": 65536,
+    "mixed_mask_bytes": 262144,
+    "mask_storage": "dense_bool",
+    "linear_state_bytes": 33792,
+    "gated_state_bytes": 33792,
+    "dense_kv_cache_fp32_bytes": 524288,
+    "linear_prefix_bytes_batch1": 4194304,
+    "receptive_field": 126,
+    "receptive_field_note": "In a 2-layer window-64 model the receptive field is 2*(64-1)=126, so far queries are unreachable by construction."
+  },
+  "missing_gpu_stages": [],
+  "attention_rows": 36,
+  "kv": {
+    "full_cache_by_cell": {
+      "2048|start|0": 1.0,
+      "2048|start|2": 1.0,
+      "2048|start|8": 1.0,
+      "2048|middle|0": 1.0,
+      "2048|middle|2": 1.0,
+      "2048|middle|8": 1.0,
+      "2048|end|0": 1.0,
+      "2048|end|2": 1.0,
+      "2048|end|8": 1.0,
+      "4096|start|0": 1.0,
+      "4096|start|2": 1.0,
+      "4096|start|8": 1.0,
+      "4096|middle|0": 1.0,
+      "4096|middle|2": 1.0,
+      "4096|middle|8": 1.0,
+      "4096|end|0": 1.0,
+      "4096|end|2": 1.0,
+      "4096|end|8": 1.0
+    },
+    "cell_note": "Each factorial cell has 10 prompts and is descriptive only.",
+    "methods": {
+      "fp16": {
+        "n": 180,
+        "unconditional_accuracy": 1.0,
+        "n_reference_correct": 180,
+        "conditional_accuracy": 1.0
+      },
+      "sink_recent": {
+        "n": 180,
+        "unconditional_accuracy": 0.3333333333333333,
+        "n_reference_correct": 180,
+        "conditional_accuracy": 0.3333333333333333
+      },
+      "question": {
+        "n": 180,
+        "unconditional_accuracy": 1.0,
+        "n_reference_correct": 180,
+        "conditional_accuracy": 1.0
+      },
+      "int4_token": {
+        "n": 180,
+        "unconditional_accuracy": 0.0,
+        "n_reference_correct": 180,
+        "conditional_accuracy": 0.0
+      },
+      "int4_channel": {
+        "n": 180,
+        "unconditional_accuracy": 1.0,
+        "n_reference_correct": 180,
+        "conditional_accuracy": 1.0
+      },
+      "hybrid": {
+        "n": 180,
+        "unconditional_accuracy": 0.9888888888888889,
+        "n_reference_correct": 180,
+        "conditional_accuracy": 0.9888888888888889
+      }
+    },
+    "paired_bootstrap": [
+      {
+        "mean_diff": -0.6666666666666666,
+        "ci_low": -0.7333333333333333,
+        "ci_high": -0.5944444444444444,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "sink_recent",
+        "right": "fp16",
+        "contrast": "sink_recent - fp16"
+      },
+      {
+        "mean_diff": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "question",
+        "right": "fp16",
+        "contrast": "question - fp16"
+      },
+      {
+        "mean_diff": -1.0,
+        "ci_low": -1.0,
+        "ci_high": -1.0,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "int4_token",
+        "right": "fp16",
+        "contrast": "int4_token - fp16"
+      },
+      {
+        "mean_diff": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "int4_channel",
+        "right": "fp16",
+        "contrast": "int4_channel - fp16"
+      },
+      {
+        "mean_diff": -0.011111111111111112,
+        "ci_low": -0.027777777777777776,
+        "ci_high": 0.0,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "hybrid",
+        "right": "fp16",
+        "contrast": "hybrid - fp16"
+      },
+      {
+        "mean_diff": -0.011111111111111112,
+        "ci_low": -0.027777777777777776,
+        "ci_high": 0.0,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "hybrid",
+        "right": "question",
+        "contrast": "hybrid - question"
+      },
+      {
+        "mean_diff": -0.011111111111111112,
+        "ci_low": -0.027777777777777776,
+        "ci_high": 0.0,
+        "n": 180,
+        "n_resamples": 2000,
+        "left": "hybrid",
+        "right": "int4_channel",
+        "contrast": "hybrid - int4_channel"
+      }
+    ]
+  },
+  "forward_sweep_rows": 20
+}
