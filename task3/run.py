@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +61,31 @@ def require_cuda(stage: str) -> None:
         raise SystemExit(f"{stage} requires CUDA and will not download weights or run on CPU.")
 
 
+OUT_OF_BUDGET = 75
+
+
+def _check_deadline(what: str) -> None:
+    """Stop cleanly before Kaggle's 12h session limit. Finished pieces stay on disk."""
+    deadline = os.environ.get("PA4_DEADLINE")
+    if deadline and time.time() > float(deadline):
+        print(f"out of session budget before {what}; rerun the stage to resume", flush=True)
+        raise SystemExit(OUT_OF_BUDGET)
+
+
+def _eval_part(name: str, compute):
+    """Cache one deterministic piece of the eval stage so a timed-out run resumes."""
+    path = results_dir() / "eval_parts" / f"{name}.json"
+    if path.is_file():
+        print(f"eval: reusing {name}", flush=True)
+        return json.loads(path.read_text(encoding="utf-8"))["value"]
+    _check_deadline(f"eval part {name}")
+    started = time.time()
+    value = compute()
+    _dump(path, {"value": value})
+    print(f"eval: {name} done in {time.time() - started:.0f}s", flush=True)
+    return value
+
+
 def stage_unit() -> None:
     import unittest
 
@@ -80,6 +107,10 @@ def stage_distill() -> None:
     for method in METHODS:
         for seed in TRAIN_SEEDS:
             output = checkpoint_dir() / method / f"seed{seed}"
+            if (output / "adapter").is_dir():
+                print(f"distill {method} seed {seed}: adapter exists, skipping", flush=True)
+                continue
+            _check_deadline(f"distill {method} seed {seed}")
             print(f"distilling {method} seed {seed}", flush=True)
             train_method(method, seed, output)
 
@@ -187,6 +218,9 @@ def stage_merge() -> None:
             merged = checkpoint_dir() / method / f"seed{seed}" / "merged"
             if not adapter.is_dir():
                 raise SystemExit(f"missing adapter {adapter}. Run the distill stage first.")
+            if merged.is_dir() and any(merged.glob("*.safetensors")):
+                print(f"merge {method} seed {seed}: merged draft exists, skipping", flush=True)
+                continue
             print(f"merging {method} seed {seed}", flush=True)
             merge_adapter_into_fresh_backbone(adapter, merged)
 
@@ -240,7 +274,7 @@ def stage_eval() -> None:
     examples = load_eval_pool()
     bank_path = default_data_paths()["prefix_banks"]
     supplied = load_prefix_bank(bank_path) if bank_path.is_file() else []
-    exact_rows = _exact_spec_rows(target, original_draft, tokenizer, examples)
+    exact_rows = _eval_part("exact_spec_rows", lambda: _exact_spec_rows(target, original_draft, tokenizer, examples))
     drafts = [("original", original_draft)]
     for method in METHODS:
         for seed in TRAIN_SEEDS:
@@ -253,8 +287,12 @@ def stage_eval() -> None:
     alignment = {}
     shared_banks = supplied + exact_rows
     for name, model in drafts:
-        scored = evaluate_draft_on_bank(target, model, tokenizer, shared_banks, name)
-        alignment[name] = summarize_alignment(scored)
+        alignment[name] = _eval_part(
+            f"alignment_{name}",
+            lambda model=model, name=name: summarize_alignment(
+                evaluate_draft_on_bank(target, model, tokenizer, shared_banks, name)
+            ),
+        )
     # Each trained student's own prefixes, then both students of every method on
     # each frozen rollout bank. Comparisons stay inside one bank's prefix ids.
     eos_id = None if tokenizer.eos_token_id is None else int(tokenizer.eos_token_id)
@@ -263,6 +301,12 @@ def stage_eval() -> None:
         if name == "original":
             continue
         seed = int(name.rsplit("seed", 1)[1])
+        bank_path = results_dir() / f"prefixes_{name}.json"
+        if bank_path.is_file():
+            print(f"eval: reusing prefixes_{name}", flush=True)
+            student_banks[name] = json.loads(bank_path.read_text(encoding="utf-8"))["rows"]
+            continue
+        _check_deadline(f"student bank {name}")
         rows = []
         for index, example in enumerate(examples):
             prompt_ids = render_chat(tokenizer, example.text)
@@ -290,24 +334,34 @@ def stage_eval() -> None:
         if name == "original":
             continue
         for other_name, rows in student_banks.items():
-            scored = evaluate_draft_on_bank(target, model, tokenizer, rows, name)
-            cross[f"{name}_on_{other_name}"] = summarize_alignment(scored)
+            key = f"{name}_on_{other_name}"
+            cross[key] = _eval_part(
+                f"cross_{key}",
+                lambda model=model, name=name, rows=rows: summarize_alignment(
+                    evaluate_draft_on_bank(target, model, tokenizer, rows, name)
+                ),
+            )
     benchmarks = {}
     accuracy = {}
     for name, model in drafts:
-        benchmarks[name] = _benchmark(
-            target,
-            model,
-            tokenizer,
-            examples,
-            label=name,
-            max_new=SPEED_MAX_NEW,
-            ignore_eos=False,
-            seed=6304,
-        )
-        _attach_speed(benchmarks[name])
+
+        def bench(model=model, name=name):
+            report = _benchmark(
+                target,
+                model,
+                tokenizer,
+                examples,
+                label=name,
+                max_new=SPEED_MAX_NEW,
+                ignore_eos=False,
+                seed=6304,
+            )
+            _attach_speed(report)
+            return report
+
+        benchmarks[name] = _eval_part(f"benchmark_{name}", bench)
         # Standalone student generations use the answer caps. Speculative rows are not scored.
-        accuracy[name] = _standalone(model, tokenizer, examples)
+        accuracy[name] = _eval_part(f"standalone_{name}", lambda model=model: _standalone(model, tokenizer, examples))
     payload = {
         "alignment": alignment,
         "cross_student_alignment": cross,
