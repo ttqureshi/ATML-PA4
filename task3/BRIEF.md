@@ -65,9 +65,9 @@ Standalone student accuracy uses the answer-length caps and an extractor for the
 
 ## Code layout
 
-- `task3/src/speculative.py`, `distill.py`, `metrics.py`, `evaluate.py`
+- `task3/src/speculative.py`, `distill.py`, `metrics.py`, `evaluate.py`, `alignment.py`, `analysis.py`
 - `task3/tests/test_toy_sampler.py` containing the 100,000-draw chi-square gate
-- `task3/run.py` stages: `unit`, `smoke`, `baseline`, `distill`, `merge`, `eval`, `analyze`
+- `task3/run.py` stages: `unit`, `smoke`, `baseline`, `distill`, `merge`, `align`, `eval`, `analyze`
 - `task3/README.md` with the training accounting and the sampler contract
 
 ## Tests that must pass before you finish

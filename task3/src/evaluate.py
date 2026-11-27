@@ -1,4 +1,4 @@
-"""Held-out prefix metrics, speculative timing, and standalone answer checks.
+"""Speculative timing, smoke checks, and standalone answer checks (prefix metrics live in alignment.py).
 
 Speculative samples follow the target distribution and are not used to score
 the student. Standalone accuracy uses the answer-length caps and the extractors
@@ -8,7 +8,7 @@ below. Latency sections use shared.timing so CUDA work is synchronized.
 from __future__ import annotations
 
 import json
-import random
+import re
 import time
 from pathlib import Path
 from typing import Sequence
@@ -24,22 +24,9 @@ from task3.src.distill import (
     TOKEN_CHECK_PROMPTS,
     PromptExample,
     assert_same_token_ids,
-    load_jsonl,
     render_chat,
 )
-from task3.src.metrics import (
-    aggregate_token_metrics,
-    aligned_disagreements,
-    analytical_speedup,
-    bootstrap_mean,
-    bootstrap_throughput,
-    break_even_acceptance,
-    breakdown_by_domain_and_bin,
-    cost_ratios,
-    position_bin,
-    prefix_alignment,
-    requests_to_amortize,
-)
+from task3.src.metrics import cost_ratios
 from task3.src.speculative import (
     KVCacheState,
     SpeculativeDecoder,
@@ -58,8 +45,9 @@ PAIRED_REPETITIONS = 2
 RESULTS_DIR = REPO_ROOT / "results" / "task3"
 CHECKPOINT_DIR = REPO_ROOT / "checkpoints" / "task3"
 
-_NUMBER = __import__("re").compile(r"-?\d[\d,]*(?:\.\d+)?")
-_GSM_MARK = __import__("re").compile(r"####\s*(-?\d[\d,]*(?:\.\d+)?)")
+_NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+_GSM_MARK = re.compile(r"####\s*\$?\s*(-?\d[\d,]*(?:\.\d+)?)")
+_BOXED = re.compile(r"\\boxed\{([^{}]*)\}")
 
 
 def results_dir() -> Path:
@@ -77,32 +65,26 @@ def repetition_order(repetition: int) -> tuple[str, str]:
     return ("speculative", "target_only")
 
 
-def domain_of(prompt_id: str, stored: str | None = None) -> str:
-    if stored in ("math", "familiar", "shifted"):
-        return stored
-    if prompt_id.startswith("GSM8K"):
-        return "math"
-    if "familiar" in prompt_id:
-        return "familiar"
-    if "shifted" in prompt_id:
-        return "shifted"
-    if stored == "short":
-        raise ValueError(f"short prompt {prompt_id} does not say familiar or shifted")
-    raise ValueError(f"cannot assign a domain to {prompt_id}")
+def gsm8k_extraction(text: str | None) -> tuple[str | None, str]:
+    """Final number and how it was found: boxed, #### marker, last number, or none."""
+    if text is None or not str(text).strip():
+        return None, "none"
+    for content in reversed(_BOXED.findall(text)):
+        found = _NUMBER.findall(content)
+        if found:
+            return found[-1].replace(",", ""), "boxed"
+    marked = _GSM_MARK.findall(text)
+    if marked:
+        return marked[-1].replace(",", ""), "marker"
+    found = _NUMBER.findall(text)
+    if found:
+        return found[-1].replace(",", ""), "last_number"
+    return None, "none"
 
 
 def extract_gsm8k_number(text: str | None) -> str | None:
-    """Final number, preferring a GSM8K `####` marker and otherwise the last number."""
-    if text is None or not str(text).strip():
-        return None
-    marked = _GSM_MARK.findall(text)
-    raw = marked[-1] if marked else None
-    if raw is None:
-        found = _NUMBER.findall(text)
-        if not found:
-            return None
-        raw = found[-1]
-    return raw.replace(",", "")
+    """Final number: a \\boxed{} answer, else a GSM8K `####` marker, else the last number."""
+    return gsm8k_extraction(text)[0]
 
 
 def numbers_equal(predicted: str | None, gold: str | None) -> bool:
@@ -116,14 +98,20 @@ def numbers_equal(predicted: str | None, gold: str | None) -> bool:
     return abs(left - right) <= 1e-6 * max(1.0, abs(right))
 
 
+def _clean_line(line: str) -> str:
+    line = line.strip().strip("`\"'* ")
+    head, sep, tail = line.partition(":")
+    # A short label such as "Answer:" or "Destination code:" before the value.
+    if sep and tail.strip() and len(head.split()) <= 4:
+        line = tail.strip().strip("`\"'* ")
+    return line.rstrip(".").strip()
+
+
 def extract_short_form(text: str | None) -> str | None:
-    """First non-empty line, with a leading label and a trailing period removed."""
+    """First non-empty line, with a short leading label and a trailing period removed."""
     if text is None or not str(text).strip():
         return None
-    line = str(text).strip().splitlines()[0].strip().strip("`\"' ")
-    if line.lower().startswith("answer:"):
-        line = line.split(":", 1)[1].strip()
-    line = line.rstrip(".").strip()
+    line = _clean_line(str(text).strip().splitlines()[0])
     return line or None
 
 
@@ -133,18 +121,48 @@ def short_form_match(predicted: str | None, gold: str) -> bool:
     return predicted.casefold() == gold.strip().casefold()
 
 
+def short_form_contains(text: str | None, gold: str) -> bool:
+    """Lenient check: the gold answer appears as a whole word anywhere in the response."""
+    if not text:
+        return False
+    return re.search(rf"(?<![\w]){re.escape(gold.strip())}(?![\w])", text, flags=re.IGNORECASE) is not None
+
+
+def repeated_ngram_fraction(token_ids: Sequence[int], n: int = 4) -> float:
+    """Share of n-grams that already occurred earlier in the response (a degeneration signal)."""
+    grams = [tuple(token_ids[i : i + n]) for i in range(max(0, len(token_ids) - n + 1))]
+    if not grams:
+        return 0.0
+    return 1.0 - len(set(grams)) / len(grams)
+
+
 def score_standalone(domain: str, generated_text: str | None, gold: str, *, length_capped: bool) -> dict:
-    """Score a student generation. Do not pass speculative target samples here."""
+    """Score a student generation. Do not pass speculative target samples here.
+
+    Math: the extracted final number must equal the GSM8K answer; format
+    compliance means an explicit final-answer marker (boxed or ####). Short
+    form: `correct` is a strict match of the cleaned first line; format
+    compliance means a single non-empty line of at most three words;
+    `correct_lenient` accepts the gold answer anywhere as a whole word.
+    """
     if domain == "math":
-        predicted = extract_gsm8k_number(generated_text)
-        gold_number = extract_gsm8k_number(gold)
-        correct = numbers_equal(predicted, gold_number)
+        predicted, method = gsm8k_extraction(generated_text)
+        correct = numbers_equal(predicted, extract_gsm8k_number(gold))
+        compliant = method in ("boxed", "marker")
+        lenient = correct
     else:
         predicted = extract_short_form(generated_text)
+        method = "first_line" if predicted is not None else "none"
         correct = short_form_match(predicted, gold)
+        lines = [line for line in str(generated_text or "").splitlines() if line.strip()]
+        compliant = len(lines) == 1 and predicted is not None and len(predicted.split()) <= 3
+        lenient = correct or short_form_contains(generated_text, gold)
     return {
         "prediction": predicted,
         "correct": correct,
+        "correct_lenient": lenient,
+        "extraction_method": method,
+        "format_compliant": compliant,
         "unextractable": predicted is None,
         "truncated": length_capped,
     }
@@ -251,14 +269,6 @@ def cache_matches_full_forward(target_model, draft_model, token_ids: Sequence[in
         "rounds_with_rejection": sum(1 for item in rounds if item.rejected),
         "rounds_with_bonus": sum(1 for item in rounds if item.bonus_token is not None),
     }
-
-
-def _sync_elapsed(fn) -> float:
-    cuda_sync()
-    start = time.perf_counter()
-    fn()
-    cuda_sync()
-    return time.perf_counter() - start
 
 
 def isolated_forward_seconds(model, prompt_len: int, n_tokens: int, *, warmup: int = 2, repeats: int = 10) -> float:
@@ -389,6 +399,44 @@ def timed_target_only(model, prompt_ids: Sequence[int], *, max_new_tokens: int, 
     }
 
 
+def _memory_marks() -> dict:
+    if not torch.cuda.is_available():
+        return {"resident_memory_bytes": 0}
+    resident = int(torch.cuda.memory_allocated())
+    torch.cuda.reset_peak_memory_stats()
+    return {"resident_memory_bytes": resident}
+
+
+def _peak_bytes() -> int:
+    return int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else 0
+
+
+def timed_speculative(
+    decoder: SpeculativeDecoder,
+    prompt_ids: Sequence[int],
+    *,
+    gamma: int,
+    max_new_tokens: int,
+    eos_id: int | None,
+    seed: int,
+    ignore_eos: bool = False,
+) -> dict:
+    """One synchronized end-to-end speculative generation (prefill included)."""
+    marks = _memory_marks()
+    decoder.rng = np.random.default_rng(seed)
+    cuda_sync()
+    start = time.perf_counter()
+    with torch.inference_mode():
+        decoder.prefill(prompt_ids)
+        result = decoder.generate(gamma=gamma, max_new_tokens=max_new_tokens, eos_id=eos_id, ignore_eos=ignore_eos)
+    cuda_sync()
+    elapsed = time.perf_counter() - start
+    summary = summarize_speculative(result, elapsed, _peak_bytes())
+    summary.update(marks)
+    summary["tokens"] = list(result.tokens)
+    return summary
+
+
 def benchmark_prompt(
     decoder: SpeculativeDecoder,
     target_model,
@@ -401,12 +449,16 @@ def benchmark_prompt(
     repetition: int,
     ignore_eos: bool = False,
 ) -> dict:
-    """One paired repetition. Order alternates so the target-only run stays adjacent."""
+    """One paired repetition. Order alternates so the target-only run stays adjacent.
+
+    Peak memory is reset before each run; `resident_memory_bytes` (weights and
+    anything else already allocated) is recorded so the per-run increment is
+    peak minus resident.
+    """
     rows = {}
     for kind in repetition_order(repetition):
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
         if kind == "target_only":
+            marks = _memory_marks()
             rows[kind] = timed_target_only(
                 target_model,
                 prompt_ids,
@@ -415,31 +467,36 @@ def benchmark_prompt(
                 rng=np.random.default_rng(seed + 3),
                 ignore_eos=ignore_eos,
             )
+            rows[kind].update(marks)
+            rows[kind]["peak_memory_bytes"] = _peak_bytes()
         else:
-            decoder.rng = np.random.default_rng(seed)
-            cuda_sync()
-            start = time.perf_counter()
-            with torch.inference_mode():
-                decoder.prefill(prompt_ids)
-                result = decoder.generate(
-                    gamma=gamma,
-                    max_new_tokens=max_new_tokens,
-                    eos_id=eos_id,
-                    ignore_eos=ignore_eos,
-                )
-            cuda_sync()
-            elapsed = time.perf_counter() - start
-            peak = int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else 0
-            summary = summarize_speculative(result, elapsed, peak)
-            summary["tokens"] = list(result.tokens)
-            rows[kind] = summary
-        if "peak_memory_bytes" not in rows[kind] and torch.cuda.is_available():
-            rows[kind]["peak_memory_bytes"] = int(torch.cuda.max_memory_allocated())
+            rows[kind] = timed_speculative(
+                decoder, prompt_ids, gamma=gamma, max_new_tokens=max_new_tokens, eos_id=eos_id, seed=seed, ignore_eos=ignore_eos
+            )
     rows["order"] = list(repetition_order(repetition))
     rows["gamma"] = gamma
     rows["seed"] = seed
     rows["repetition"] = repetition
     return rows
+
+
+def warm_setup(decoder: SpeculativeDecoder, target_model, prompt_ids: Sequence[int], *, gamma: int, eos_id: int | None, max_new_tokens: int = 32) -> dict:
+    """First and second end-to-end call of each path on one prompt, before any timed row.
+
+    The first call carries one-time costs (kernel selection, allocator growth,
+    lazy CUDA init); the second is a warm reference. Neither enters the paired rows.
+    """
+    out = {"prompt_tokens": len(prompt_ids), "max_new_tokens": max_new_tokens, "gamma": gamma}
+    for label in ("first", "second"):
+        spec = timed_speculative(decoder, prompt_ids, gamma=gamma, max_new_tokens=max_new_tokens, eos_id=eos_id, seed=99)
+        target = timed_target_only(target_model, prompt_ids, max_new_tokens=max_new_tokens, eos_id=eos_id, rng=np.random.default_rng(99), ignore_eos=False)
+        out[label] = {
+            "speculative_elapsed_s": spec["elapsed_s"],
+            "speculative_prefill_s": spec["prefill_s"],
+            "target_only_elapsed_s": target["elapsed_s"],
+            "target_only_prefill_s": target["prefill_s"],
+        }
+    return out
 
 
 ISOLATED_PROMPT_LENGTHS = (32, 128, 512)
@@ -475,137 +532,8 @@ def estimate_speed_model(draft_model, target_model, gamma: int, prompt_lengths: 
     }
 
 
-def project_speedup(measured_acceptance: float, gamma: int, draft_over_target: float, verify_over_target: float) -> dict:
-    predicted = analytical_speedup(measured_acceptance, gamma, draft_over_target, verify_over_target)
-    return {
-        "alpha": measured_acceptance,
-        "c": draft_over_target,
-        "v_gamma": verify_over_target,
-        "predicted_speedup": predicted,
-        "break_even_alpha": break_even_acceptance(gamma, draft_over_target, verify_over_target),
-    }
-
-
-def deployment_break_even(train_seconds: float, merge_seconds: float, target_seconds: float, speculative_seconds: float) -> dict:
-    upfront = train_seconds + merge_seconds
-    saving = target_seconds - speculative_seconds
-    return {
-        "upfront_seconds": upfront,
-        "seconds_saved_per_request": saving,
-        "requests_to_amortize": requests_to_amortize(upfront, saving),
-    }
-
-
 def _prompt_seed(base_seed: int, prompt_index: int, repetition: int) -> int:
     return int(base_seed + 10007 * prompt_index + 17 * repetition)
-
-
-def bank_positions(response_len: int, prompt_id: str, bank: str) -> list[int]:
-    """Same position budget as the course prefix-bank script, under this bank's name."""
-    rng = random.Random(f"PA4-banks-v1:6304:{prompt_id}:{bank}")
-    chosen: list[int] = []
-    for low, high, count in ((1, 16, 8), (17, 32, 8), (33, 64, 16), (65, 192, 16)):
-        candidates = list(range(low, min(high, response_len) + 1))
-        chosen.extend(sorted(rng.sample(candidates, min(count, len(candidates)))))
-    return chosen
-
-
-def prefix_rows_from_generation(
-    prompt_id: str,
-    prompt: str,
-    domain: str,
-    token_ids: Sequence[int],
-    bank: str,
-    *,
-    producer: str,
-) -> list[dict]:
-    rows = []
-    for position in bank_positions(len(token_ids), prompt_id, bank):
-        rows.append(
-            {
-                "prompt_id": prompt_id,
-                "domain": domain if domain in ("math", "familiar", "shifted") else domain_of(prompt_id),
-                "bank": bank,
-                "position": position,
-                "prompt": prompt,
-                "response_prefix_token_ids": list(token_ids[: position - 1]),
-                "producer": producer,
-            }
-        )
-    return rows
-
-
-def load_prefix_bank(path: Path) -> list[dict]:
-    if not path.is_file():
-        raise FileNotFoundError(f"missing prefix bank {path}. Generate it on CUDA; unit tests do not download it.")
-    rows = []
-    for record in load_jsonl(path):
-        prompt_id = str(record["prompt_id"])
-        stored = record.get("domain")
-        rows.append(
-            {
-                "prompt_id": prompt_id,
-                "domain": domain_of(prompt_id, stored if stored in ("math", "familiar", "shifted") else None),
-                "bank": record["bank"],
-                "position": int(record["position"]),
-                "prompt": record["prompt"],
-                "response_prefix_token_ids": list(record["response_prefix_token_ids"]),
-                "producer": record.get("producer", record["bank"]),
-            }
-        )
-    return rows
-
-
-def alignment_row(teacher_probs, draft_probs, meta: dict) -> dict:
-    measured = prefix_alignment(teacher_probs, draft_probs)
-    row = dict(meta)
-    row.update(measured)
-    row["bin"] = position_bin(int(meta["position"]))
-    row["teacher_token"] = int(np.argmax(np.asarray(teacher_probs)))
-    row["draft_token"] = int(np.argmax(np.asarray(draft_probs)))
-    return row
-
-
-def next_distribution(model, token_ids: Sequence[int]) -> np.ndarray:
-    state = KVCacheState(model)
-    with torch.inference_mode():
-        state.prefill(token_ids)
-        return logits_to_probs(state.next_logits)
-
-
-def evaluate_draft_on_bank(teacher, draft, tokenizer, rows: Sequence[dict], draft_name: str) -> list[dict]:
-    """Matched prefixes only. Teacher probabilities are recomputed per row."""
-    scored = []
-    for record in rows:
-        prompt_ids = render_chat(tokenizer, record["prompt"])
-        full = prompt_ids + list(record["response_prefix_token_ids"])
-        if len(full) < 1:
-            continue
-        teacher_probs = next_distribution(teacher, full)
-        draft_probs = next_distribution(draft, full)
-        meta = dict(record)
-        meta["draft"] = draft_name
-        scored.append(alignment_row(teacher_probs, draft_probs, meta))
-    return scored
-
-
-def summarize_alignment(rows: Sequence[dict]) -> dict:
-    return {
-        "overall": aggregate_token_metrics(list(rows)),
-        "by_domain_and_bin": breakdown_by_domain_and_bin(list(rows)),
-        "disagreements": aligned_disagreements(list(rows)),
-        "n_prefixes": len(rows),
-    }
-
-
-def paired_bootstrap_report(per_prompt: Sequence[dict], *, seed: int) -> dict:
-    spec = [float(row["speculative_tps"]) for row in per_prompt]
-    target = [float(row["target_tps"]) for row in per_prompt]
-    acceptance = [float(row["acceptance"]) for row in per_prompt]
-    return {
-        "throughput_spec_minus_target": bootstrap_throughput(spec, target, seed=seed),
-        "acceptance_mean": bootstrap_mean(acceptance, seed=seed),
-    }
 
 
 def decode_text(tokenizer, token_ids: Sequence[int]) -> str:
