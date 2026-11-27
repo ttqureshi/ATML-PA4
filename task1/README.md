@@ -21,7 +21,7 @@ The weight columns are multiplied by `c_j`, then passed through the same group q
 - If those consumers disagree, each projection stores its own FP16 channel scales (2 bytes per input channel). For dense evaluation the inverse scale is baked into the reconstructed weight, and the stored scales are still counted.
 - `o_proj` reads the attention mix, and `down_proj` reads `SiLU(gate) * up`, which is not a single linear. Both always store FP16 channel scales. `down_proj` is never folded into `up_proj`.
 
-Q3 reuses the channel scales chosen by Q2 at INT4. Only the bit width changes.
+Q3 and Q3m reuse the channel scales chosen by Q2 at INT4 (and the INT4 fold/store plan). Only the bit width changes.
 
 ## Allocation rules
 
@@ -46,13 +46,17 @@ w_hat = s * (q - z)
 
 `round` is half-to-even (`numpy.rint`). A degenerate group (`w_max == w_min`) uses scale 1 so the division is defined; an all-zero group still reconstructs as 0. A trailing partial group repeats its last real weight only while min and max are computed. That repeated edge is already inside the group, so it does not move the range; the pad count is still recorded. Metadata is 4 bytes per group (FP16 scale, uint8 zero-point, one alignment byte). The payload is little-endian bit packing, padded to a byte at the end of the tensor.
 
-**Q3.** Sensitivity is the Q2 calibration output MSE at INT4 (mean squared error of the original-space reconstruction). Every projection starts at 2 bits. The ladder is `2 → 3 → 4 → 8`. Each step promotes the most sensitive projection that is not already at 8 bits. If that one step would exceed the packed-byte budget, the search stops. It does not skip ahead to a less sensitive projection. One map is built against the Q2 uniform-INT4 packed size and one against Q2 uniform-INT3. The byte check includes payload, group metadata, folded or serialized scales, and FP16 tensors outside the eligible set, with tied parameters counted once. The map is written before any test file is opened. Development-set NLL and projection MSE are recorded afterwards and do not change the map.
+**Q3 (v1, sensitivity ladder; kept as the unsuccessful design).** Sensitivity is the Q2 calibration output MSE at INT4 (mean squared error of the original-space reconstruction). Every projection starts at 2 bits. The ladder is `2 → 3 → 4 → 8`. Projections are ranked by sensitivity (descending, ties by module name). Each step promotes the most sensitive projection that is neither at 8 bits nor blocked by one ladder step. If that step would exceed the packed-byte budget, that projection is blocked (it keeps its current width) and the next most sensitive one is tried. The search stops when every projection is at 8 bits or blocked. One map is built against the Q2 uniform-INT4 packed size and one against Q2 uniform-INT3. The byte check includes payload, group metadata, folded or serialized scales, and FP16 tensors outside the eligible set, with tied parameters counted once. The map is written before any test file is opened. Development-set NLL and projection MSE are recorded afterwards and do not change the map.
+
+The ladder spends the budget on a few projections: it drives the most sensitive ones to 8 bits and leaves most at 2 bits. That failure is visible on calibration and development data alone (total calibration MSE far above Q2's at the same bytes, development NLL 8.28 at the INT4 budget), which motivates Q3m.
+
+**Q3m (v2, multiple-choice knapsack).** For every eligible projection the calibration output MSE is measured at each `b ∈ {2, 3, 4, 8}` with that projection's frozen Q2 INT4 alpha and the INT4 fold/store plan (the INT4 entry is the alpha-search optimum, and the recomputed alphas must equal the ones recorded in `conditions/q2_b4`). Every projection starts at 2 bits. At each step every upgrade of every projection from its current width to any higher allowed width (including `2 → 8` directly) is considered if its MSE reduction `mse[current] - mse[new]` is positive and its extra packed bytes keep the total at or under the budget. The upgrade with the largest reduction per extra byte is taken; ties go to the module name, then the smaller width. The search stops when no such upgrade exists. Packed bytes use the same byte function as Q2/Q3. Budgets are the `packed_bytes` of `q2_b4` and `q2_b3`, recomputed and checked. Greedy-by-ratio is not an exact knapsack solver: on small instances the last unusable bytes can leave it slightly behind another feasible map, which is why the saved allocation records the v1 and Q2 calibration totals under the same MSE table. Maps are written to `allocation/q3m_b4.json` and `allocation/q3m_b3.json` before any test file is opened; `allocation/q3m_development_diagnostic.json` follows and does not change them.
 
 ## Evaluation
 
 Perplexity is `exp(sum of token NLL / N)`. `N` is the locked `scored_tokens` count. The first token of each window is not scored. WikiText-2 and C4 validation each contribute 50,000 scored tokens.
 
-HellaSwag uses the 2,000 locked validation rows. The query is `preprocess(activity_label + ": " + ctx_a + " " + ctx_b.capitalize())` and each ending is `preprocess(ending)`, with the lm-evaluation-harness bracket cleanup. The score is the conditional token log-likelihood of the ending given the query. `acc_norm` divides by the character length of the preprocessed ending, not by the token count. FP16, the three 50% pruning methods, and Q1/Q2/Q3 at INT4 and INT3 use all 2,000 rows. Every other condition uses the first 512 orders.
+HellaSwag uses the 2,000 locked validation rows. The query is `preprocess(activity_label + ": " + ctx_a + " " + ctx_b.capitalize())` and each ending is `preprocess(ending)`, with the lm-evaluation-harness bracket cleanup. The score is the conditional token log-likelihood of the ending given the query. `acc_norm` divides by the character length of the preprocessed ending, not by the token count. FP16, the three 50% pruning methods, and Q1/Q2/Q3/Q3m at INT4 and INT3 use all 2,000 rows. Every other condition uses the first 512 orders.
 
 Paired intervals use `shared.bootstrap`. HellaSwag resamples examples. Perplexity resamples whole windows, recomputes pooled NLL, and reports the helper's interval on that NLL difference together with the exponentiated point perplexities.
 
@@ -77,8 +81,9 @@ These stages need the checkpoint and a CUDA GPU. They are not part of the CPU te
 python task1/run.py baseline --output task1/results
 python task1/run.py prune --output task1/results
 python task1/run.py quantize --output task1/results
+python task1/run.py quantize_q3m --output task1/results
 python task1/run.py resources --output task1/results
 python task1/run.py analyze --output task1/results
 ```
 
-`prune` freezes `tau` in `allocation/p3_tau.json` before it opens a test file. `quantize` freezes both Q3 maps before it opens a test file. `resources` only fills latency that is still missing. `--skip-latency` on the quality stages leaves that work for `resources`. Do not commit `results/`, checkpoints, or the data checkout.
+`prune` freezes `tau` in `allocation/p3_tau.json` before it opens a test file. `quantize` freezes both Q3 maps before it opens a test file. `quantize_q3m` needs the finished `q2_b4` and `q2_b3` summaries, freezes both Q3m maps before it opens a test file, and skips any finished piece when rerun. `analyze` includes Q3m (and the Q3m−Q2 and Q3m−Q3 bootstrap pairs) whenever its conditions exist. `resources` only fills latency that is still missing. `--skip-latency` on the quality stages leaves that work for `resources`. Do not commit `results/`, checkpoints, or the data checkout.

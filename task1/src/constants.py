@@ -73,5 +73,7 @@ FULL_HELLASWAG_CONDITIONS = frozenset(
         "q2_b3",
         "q3_b4",
         "q3_b3",
+        "q3m_b4",
+        "q3m_b3",
     }
 )

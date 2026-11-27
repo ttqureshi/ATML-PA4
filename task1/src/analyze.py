@@ -44,11 +44,21 @@ REQUIRED = (
     "q3_b3",
 )
 
+# Q3 v2 (knapsack). Included whenever the quantize_q3m stage has written them.
+OPTIONAL = ("q3m_b4", "q3m_b3")
+
 PAIRS = (
     ("p3_s50", "p2_s50", "P3-P2 at 50% sparsity"),
     ("p3_s75", "p2_s75", "P3-P2 at 75% sparsity"),
     ("q3_b4", "q2_b4", "Q3-Q2 at the uniform INT4 byte budget"),
     ("q3_b3", "q2_b3", "Q3-Q2 at the uniform INT3 byte budget"),
+)
+
+OPTIONAL_PAIRS = (
+    ("q3m_b4", "q2_b4", "Q3m-Q2 at the uniform INT4 byte budget"),
+    ("q3m_b3", "q2_b3", "Q3m-Q2 at the uniform INT3 byte budget"),
+    ("q3m_b4", "q3_b4", "Q3m-Q3 at the uniform INT4 byte budget"),
+    ("q3m_b3", "q3_b3", "Q3m-Q3 at the uniform INT3 byte budget"),
 )
 
 
@@ -128,7 +138,10 @@ def _quality_figure(summaries, path: Path, panels: list[tuple[str, str, str]]) -
                 ("Q1", ["q1_b8", "q1_b4", "q1_b3"], "o"),
                 ("Q2", ["q2_b8", "q2_b4", "q2_b3"], "s"),
                 ("Q3", ["q3_b4", "q3_b3"], "D"),
+                ("Q3m knapsack", ["q3m_b4", "q3m_b3"], "^"),
             ):
+                if not all(condition in summaries for condition in conditions):
+                    continue
                 xs, ys = _series(summaries, conditions, x_key, metric)
                 ax.plot(xs, ys, marker=marker, label=label)
             if "fp16" in summaries:
@@ -212,7 +225,7 @@ def _qualitative(output: Path, summaries: dict[str, dict]) -> list[dict]:
     items = []
     for order in range(8):
         item = {"order": order, "text": text.get(order), "conditions": {}}
-        for condition in REQUIRED:
+        for condition in summaries:
             rows = _hellaswag_vectors(output, condition)
             if order in rows:
                 row = rows[order]
@@ -226,6 +239,13 @@ def _qualitative(output: Path, summaries: dict[str, dict]) -> list[dict]:
                 }
         items.append(item)
     return items
+
+
+def _mean_mse(summary: dict) -> float | None:
+    values = [row.get("mse") for row in summary.get("projections", [])]
+    if not values or any(value is None for value in values):
+        return None
+    return float(np.mean([float(value) for value in values]))
 
 
 def _deltas(summaries: dict[str, dict]) -> list[dict]:
@@ -247,6 +267,7 @@ def _deltas(summaries: dict[str, dict]) -> list[dict]:
                 "hellaswag_accuracy_minus_fp16": summary["quality"]["hellaswag"]["accuracy"] - base["quality"]["hellaswag"]["accuracy"],
                 "hellaswag_acc_norm": summary["quality"]["hellaswag"]["acc_norm"],
                 "hellaswag_n": summary["quality"]["hellaswag"]["n_examples"],
+                "mean_projection_calibration_mse": _mean_mse(summary),
             }
         )
     return rows
@@ -259,6 +280,12 @@ def analyze(output: Path) -> None:
             "analyze needs the finished condition summaries. Still missing: " + ", ".join(missing)
         )
     summaries = {condition: _load_summary(output, condition) for condition in REQUIRED}
+    present = [condition for condition in OPTIONAL if (output / "conditions" / condition / "summary.json").is_file()]
+    if len(present) != len(OPTIONAL):
+        print("analyze: Q3m conditions missing, run quantize_q3m to include them: "
+              + ", ".join(condition for condition in OPTIONAL if condition not in present), flush=True)
+    for condition in present:
+        summaries[condition] = _load_summary(output, condition)
     figures = output / "figures"
     _quality_figure(
         summaries,
@@ -294,11 +321,18 @@ def analyze(output: Path) -> None:
     )
     _heatmap(summaries["q3_b4"]["projections"], "bits", figures / "q3_bits_int4_budget.png", "Q3 bits under the Q2 INT4 budget")
     _heatmap(summaries["q3_b3"]["projections"], "bits", figures / "q3_bits_int3_budget.png", "Q3 bits under the Q2 INT3 budget")
-    bootstrap = {label: _paired(output, left, right) for left, right, label in PAIRS}
+    for condition, bits in (("q3m_b4", 4), ("q3m_b3", 3)):
+        if condition in summaries:
+            _heatmap(summaries[condition]["projections"], "bits", figures / f"q3m_bits_int{bits}_budget.png",
+                     f"Q3m knapsack bits under the Q2 INT{bits} budget")
+    if "q3m_b4" in summaries:
+        int2 = [dict(row, log10_int2_mse=float(np.log10(max(float(row["mse_by_bits"]["2"]), 1e-30))))
+                for row in summaries["q3m_b4"]["projections"]]
+        _heatmap(int2, "log10_int2_mse", figures / "q3m_sensitivity.png",
+                 "Q3m: log10 calibration output MSE at INT2 (INT4 alphas)")
+    pairs = list(PAIRS) + [pair for pair in OPTIONAL_PAIRS if pair[0] in summaries and pair[1] in summaries]
     # Keep the human label as the key rather than only the condition ids.
-    labeled = {}
-    for left, right, label in PAIRS:
-        labeled[label] = bootstrap[label]
+    labeled = {label: _paired(output, left, right) for left, right, label in pairs}
     write_json(output / "bootstrap.json", labeled)
     write_json(output / "comparison.json", _deltas(summaries))
     write_json(output / "qualitative_hellaswag.json", _qualitative(output, summaries))

@@ -200,7 +200,7 @@
   "budget_bytes": 1163734016,
   "budget_condition": "q2_b4",
   "final_bytes": 1163734016,
-  "rule": "start at 2 bits; promote the most sensitive unfinished projection one ladder step; stop when that step exceeds the budget",
+  "rule": "start every projection at 2 bits; rank projections by sensitivity (descending, ties by module name); at each step promote the most sensitive projection that is neither at 8 bits nor blocked one ladder step 2->3->4->8; if that step would exceed the budget, block that projection (it keeps its current width) and try the next one; stop when every projection is at 8 bits or blocked",
   "scales": "INT4 AWQ channel scales; only the bit width changes",
   "sensitivity": {
     "model.layers.0.mlp.down_proj": 0.0007894466204258302,

@@ -1,4 +1,4 @@
-"""P3 sparsity repair and the Q3 bit ladder.
+"""P3 sparsity repair, the Q3 bit ladder, and the Q3m knapsack.
 
 P3 sets ``s_l`` proportional to ``1 / (sensitivity_l + eps) ** tau``. A
 projection whose isolated prune distorts the output more keeps more of its
@@ -13,11 +13,19 @@ projection that is not already at 8 bits, along 2 → 3 → 4 → 8. If that
 promotion would exceed the packed-byte budget, that projection is left where
 it is and the next most sensitive projection is tried. The search stops when
 no remaining promotion fits.
+
+Q3m (``allocate_q3_knapsack``) treats the same problem as a multiple-choice
+knapsack. Every projection has a measured calibration error at each allowed
+bit width. It starts every projection at 2 bits and repeatedly takes the one
+upgrade, over all projections and all higher bit widths (2 -> 8 directly
+included), with the largest error reduction per extra packed byte that still
+fits the budget. It stops when no upgrade with a positive error reduction fits.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable, Mapping
 
 from task1.src.constants import Q3_BITS, SPARSITY_CLIP
 from task1.src.pruning import fraction_in_clip, sparsity_bounds, uniform_zero_budget
@@ -200,6 +208,14 @@ def allocate_p3_zeros(
     return zeros
 
 
+Q3_LADDER_RULE = (
+    "start every projection at 2 bits; rank projections by sensitivity (descending, ties by module name); "
+    "at each step promote the most sensitive projection that is neither at 8 bits nor blocked one ladder "
+    "step 2->3->4->8; if that step would exceed the budget, block that projection (it keeps its current "
+    "width) and try the next one; stop when every projection is at 8 bits or blocked"
+)
+
+
 def next_q3_bit(bits: int) -> int | None:
     ladder = Q3_BITS
     if bits not in ladder:
@@ -279,4 +295,136 @@ def allocate_q3_bits(
         steps=tuple(steps),
         final_bytes=final_bytes,
         budget_bytes=int(budget_bytes),
+    )
+
+
+Q3M_RULE = (
+    "start every projection at 2 bits; at each step consider every upgrade of every projection from its "
+    "current bit width to any higher width in {3, 4, 8} (2->8 directly allowed) whose calibration MSE "
+    "reduction mse[b_current] - mse[b_new] is positive and whose extra packed bytes keep the total at or "
+    "under the budget; take the upgrade with the largest reduction / extra bytes, ties broken by module "
+    "name ascending then the smaller target width; stop when no such upgrade exists. Packed bytes come "
+    "from the same byte function as Q2/Q3 (payload, group metadata, serialized scales, excluded FP16)."
+)
+
+
+@dataclass(frozen=True)
+class Q3KnapsackAllocation:
+    bits: dict[str, int]
+    within_budget: bool
+    steps: tuple[dict, ...]
+    final_bytes: int
+    budget_bytes: int
+    start_bytes: int
+    total_mse: float
+
+
+def _upgrade_costs(names: list[str], byte_fn, start_bytes: int) -> dict[str, dict[int, int]]:
+    """Packed bytes each projection adds over the all-2-bit map, per bit width."""
+    base = {name: Q3_BITS[0] for name in names}
+    costs: dict[str, dict[int, int]] = {}
+    for name in names:
+        costs[name] = {Q3_BITS[0]: 0}
+        previous = 0
+        for bits in Q3_BITS[1:]:
+            trial = dict(base)
+            trial[name] = bits
+            extra = int(byte_fn(trial)) - start_bytes
+            if extra <= previous:
+                raise ValueError(f"packed bytes of {name} do not grow with the bit width")
+            costs[name][bits] = extra
+            previous = extra
+    return costs
+
+
+def allocate_q3_knapsack(
+    names: list[str],
+    mse: Mapping[str, Mapping[int, float]],
+    byte_fn: Callable[[dict[str, int]], int],
+    budget_bytes: int,
+) -> Q3KnapsackAllocation:
+    """Greedy multiple-choice knapsack on calibration MSE reduction per packed byte.
+
+    ``mse[name][b]`` is the calibration output MSE of that projection quantized
+    at ``b`` bits, for every ``b`` in ``Q3_BITS``. ``byte_fn`` is the same
+    full-map packed-byte function as ``allocate_q3_bits``. It must be additive
+    over projections (it is: payload is padded per tensor). Per-projection
+    costs are read from it once, and every accepted step is re-checked against
+    it, so the budget test always uses the exact byte function.
+    """
+    if len(names) == 0:
+        raise ValueError("allocation needs at least one projection")
+    if len(set(names)) != len(names):
+        raise ValueError("projection names must be unique")
+    for name in names:
+        if name not in mse:
+            raise ValueError(f"no MSE table for {name}")
+        for bits in Q3_BITS:
+            if bits not in mse[name]:
+                raise ValueError(f"{name} has no MSE at {bits} bits")
+    budget_bytes = int(budget_bytes)
+    order = sorted(names)
+    bits = {name: Q3_BITS[0] for name in order}
+    start_bytes = int(byte_fn(bits))
+
+    def total(assign: dict[str, int]) -> float:
+        return float(sum(float(mse[name][assign[name]]) for name in order))
+
+    if start_bytes > budget_bytes:
+        return Q3KnapsackAllocation(bits, False, (), start_bytes, budget_bytes, start_bytes, total(bits))
+    costs = _upgrade_costs(order, byte_fn, start_bytes)
+    used = start_bytes
+    steps: list[dict] = []
+    limit = len(order) * (len(Q3_BITS) - 1) + 1
+    while True:
+        if len(steps) >= limit:
+            raise InfeasibleAllocation("Q3m knapsack did not terminate")
+        best = None
+        best_key = None
+        for name in order:
+            current = bits[name]
+            for target in Q3_BITS:
+                if target <= current:
+                    continue
+                extra = costs[name][target] - costs[name][current]
+                if used + extra > budget_bytes:
+                    continue
+                gain = float(mse[name][current]) - float(mse[name][target])
+                if not gain > 0.0:
+                    continue
+                ratio = gain / extra
+                # Larger ratio first; then module name ascending; then the smaller width.
+                key = (-ratio, name, target)
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best = (name, target, extra, gain, ratio)
+        if best is None:
+            break
+        name, target, extra, gain, ratio = best
+        previous = bits[name]
+        bits[name] = target
+        used += extra
+        checked = int(byte_fn(bits))
+        if checked != used:
+            raise ValueError("byte function is not additive over projections")
+        steps.append(
+            {
+                "projection": name,
+                "from_bits": previous,
+                "bits": target,
+                "mse_reduction": gain,
+                "extra_bytes": extra,
+                "reduction_per_byte": ratio,
+                "packed_bytes": used,
+            }
+        )
+    final_bytes = int(byte_fn(bits))
+    return Q3KnapsackAllocation(
+        bits={name: bits[name] for name in names},
+        within_budget=final_bytes <= budget_bytes,
+        steps=tuple(steps),
+        final_bytes=final_bytes,
+        budget_bytes=budget_bytes,
+        start_bytes=start_bytes,
+        total_mse=total(bits),
     )

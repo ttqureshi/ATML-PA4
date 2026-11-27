@@ -9,7 +9,14 @@ import numpy as np
 
 from shared.paths import DATA_REPO_COMMIT, DATA_REPO_URL
 from shared.seed import DEFAULT_SEED, set_seed
-from task1.src.allocation import ProjectionSize, allocate_p3_zeros, allocate_q3_bits
+from task1.src.allocation import (
+    Q3_LADDER_RULE,
+    Q3M_RULE,
+    ProjectionSize,
+    allocate_p3_zeros,
+    allocate_q3_bits,
+    allocate_q3_knapsack,
+)
 from task1.src.apply import (
     average_bits,
     p3_matrix,
@@ -539,6 +546,22 @@ def _quant_bytes(census, records) -> dict:
     return packed
 
 
+def _packed_bytes_for(modules, census, bit_of: dict[str, int], mode_of: dict[str, str]) -> int:
+    """Packed bytes of one bit map: payload, group metadata, serialized scales, excluded FP16."""
+    projections = []
+    for name, module in modules:
+        rows, cols = module.weight.shape
+        projections.append(
+            {
+                "rows": int(rows),
+                "cols": int(cols),
+                "bits": int(bit_of[name]),
+                "scale_bytes": projection_scale_bytes(int(cols), mode_of[name]) if mode_of else 0,
+            }
+        )
+    return quantized_model_bytes(projections, census["n_excluded"])["packed_bytes"]
+
+
 def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
     gate = TestFileGate()
     require_locked(["calibration", "development"], gate)
@@ -554,20 +577,10 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
         alphas[bits] = chosen
         mse_tables[bits] = table
     modes = _scale_plan(modules, stats, alphas[4])
+
     # Budgets use the same byte function as the Q3 trial maps.
     def bytes_for(bit_of: dict[str, int], mode_of: dict[str, str]) -> int:
-        projections = []
-        for name, module in modules:
-            rows, cols = module.weight.shape
-            projections.append(
-                {
-                    "rows": int(rows),
-                    "cols": int(cols),
-                    "bits": int(bit_of[name]),
-                    "scale_bytes": projection_scale_bytes(int(cols), mode_of[name]) if mode_of else 0,
-                }
-            )
-        return quantized_model_bytes(projections, census["n_excluded"])["packed_bytes"]
+        return _packed_bytes_for(modules, census, bit_of, mode_of)
 
     q2_budgets = {}
     for bits in (4, 3):
@@ -600,7 +613,7 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
                 "sensitivity": sensitivities,
                 "sensitivity_definition": "Q2 calibration output MSE at INT4, original-space reconstruction",
                 "scales": "INT4 AWQ channel scales; only the bit width changes",
-                "rule": "start at 2 bits; promote the most sensitive unfinished projection one ladder step; stop when that step exceeds the budget",
+                "rule": Q3_LADDER_RULE,
             },
         )
         print(f"quantize: froze {label} at {allocation.final_bytes} bytes (budget {allocation.budget_bytes})", flush=True)
@@ -691,6 +704,261 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
         written.append(condition)
         _write_index(output, [condition])
     print("quantize: done", flush=True)
+
+
+Q3M_LABELS = (("q3m_b4", 4), ("q3m_b3", 3))
+
+
+def _read_json(path: Path):
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _read_summary(output: Path, condition: str) -> dict:
+    path = output / "conditions" / condition / "summary.json"
+    if not path.is_file():
+        raise SystemExit(f"quantize_q3m needs {path}. Run the quantize stage first.")
+    return _read_json(path)
+
+
+def _awq_mse_at(model, modules, calibration, microbatch, stats, alphas: dict[str, float], bits: int) -> dict[str, float]:
+    """Calibration output MSE of every projection quantized at ``bits`` with frozen alphas.
+
+    The reconstructions are held as exact FP16, one copy of all projections at a time.
+    """
+    recon = {}
+    for name, module in modules:
+        built = quantize_awq(read_weight(module), stats[name]["mean_abs"], float(alphas[name]), bits)
+        recon[name] = _as_fp16(built["values_original_space"])
+        del built
+    measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
+    del recon
+    return {name: float(measured[name]["mse"]) for name, _module in modules}
+
+
+def _q3m_check_alphas(modules, alphas: dict[str, float], q2_b4: dict) -> None:
+    """Fail loudly unless the INT4 alphas equal the ones Q2 INT4 recorded."""
+    recorded = {row["module"]: float(row["alpha"]) for row in q2_b4["projections"]}
+    names = [name for name, _module in modules]
+    if set(recorded) != set(names) or set(alphas) != set(names):
+        raise RuntimeError("q2_b4 projection records do not cover the same eligible projections")
+    wrong = [name for name in names if float(alphas[name]) != recorded[name]]
+    if wrong:
+        raise RuntimeError(
+            f"recomputed INT4 alphas differ from conditions/q2_b4 on {len(wrong)} projections, e.g. "
+            + ", ".join(f"{name}: {alphas[name]} vs {recorded[name]}" for name in wrong[:5])
+        )
+
+
+def _q3m_budgets(modules, census, modes4: dict[str, str], q2: dict[int, dict]) -> dict[int, int]:
+    """Q2 uniform budgets, recomputed with the Q3 byte function and checked against the Q2 summaries."""
+    names = [name for name, _module in modules]
+    recorded4 = {row["module"]: row["compensation"] for row in q2[4]["projections"]}
+    if any(recorded4[name] != modes4[name] for name in names):
+        raise RuntimeError("INT4 fold/store plan differs from the one recorded in conditions/q2_b4")
+    budgets = {}
+    for bits in (4, 3):
+        # Q2 at INT3 used its own alphas' fold/store plan, and its records keep that plan,
+        # so the INT3 budget is reproduced without an INT3 alpha search.
+        mode_of = {row["module"]: row["compensation"] for row in q2[bits]["projections"]}
+        recomputed = _packed_bytes_for(modules, census, {name: bits for name in names}, mode_of)
+        if recomputed != int(q2[bits]["packed_bytes"]):
+            raise RuntimeError(
+                f"recomputed Q2 INT{bits} budget {recomputed} != conditions/q2_b{bits} "
+                f"packed_bytes {q2[bits]['packed_bytes']}"
+            )
+        budgets[bits] = recomputed
+    return budgets
+
+
+def _q3m_select(output, model, modules, census, calibration, microbatch, stats, q2):
+    """Sensitivity passes and both knapsack maps. Reads calibration data only."""
+    started = time.perf_counter()
+    print("quantize-q3m: INT4 alpha search (3 calibration passes)", flush=True)
+    alphas, alpha_table = _search_alphas(model, modules, calibration, microbatch, stats, 4)
+    _q3m_check_alphas(modules, alphas, q2[4])
+    print("quantize-q3m: INT4 alphas match conditions/q2_b4", flush=True)
+    modes = _scale_plan(modules, stats, alphas)
+    budgets = _q3m_budgets(modules, census, modes, q2)
+    print(f"quantize-q3m: budgets INT4={budgets[4]} INT3={budgets[3]} match the Q2 summaries", flush=True)
+    names = [name for name, _module in modules]
+    mse = {name: {4: float(alpha_table[name][alphas[name]])} for name in names}
+    del alpha_table
+    for bits in (2, 3, 8):
+        measured = _awq_mse_at(model, modules, calibration, microbatch, stats, alphas, bits)
+        for name in names:
+            mse[name][bits] = measured[name]
+        print(f"quantize-q3m: calibration MSE at INT{bits} measured", flush=True)
+
+    def byte_fn(bit_of: dict[str, int]) -> int:
+        return _packed_bytes_for(modules, census, bit_of, modes)
+
+    v1_bits = {}
+    for bits in (4, 3):
+        path = output / "allocation" / f"q3_b{bits}.json"
+        if path.is_file():
+            v1_bits[bits] = {key: int(value) for key, value in _read_json(path)["bits"].items()}
+    allocations = {}
+    for label, bits in Q3M_LABELS:
+        allocation = allocate_q3_knapsack(names, mse, byte_fn, budgets[bits])
+        if not allocation.within_budget or allocation.final_bytes != byte_fn(allocation.bits):
+            raise RuntimeError(f"{label} is over the Q2 INT{bits} budget")
+        v1 = v1_bits.get(bits)
+        payload = {
+            "budget_condition": f"q2_b{bits}",
+            "budget_bytes": allocation.budget_bytes,
+            "final_bytes": allocation.final_bytes,
+            "start_bytes": allocation.start_bytes,
+            "within_budget": allocation.within_budget,
+            "bits": allocation.bits,
+            "bit_histogram": {str(b): sum(1 for v in allocation.bits.values() if v == b) for b in (2, 3, 4, 8)},
+            "steps": [dict(step) for step in allocation.steps],
+            "mse_by_bits": {name: {str(b): mse[name][b] for b in (2, 3, 4, 8)} for name in names},
+            "alphas": {name: float(alphas[name]) for name in names},
+            "compensation": modes,
+            "total_calibration_mse": allocation.total_mse,
+            "v1_total_calibration_mse": None if v1 is None else float(sum(mse[name][v1[name]] for name in names)),
+            "q2_uniform_total_calibration_mse": float(sum(float(row["mse"]) for row in q2[bits]["projections"])),
+            "sensitivity_definition": (
+                "calibration output MSE of the original-space AWQ reconstruction of each projection at each "
+                "b in {2, 3, 4, 8}, with that projection's frozen Q2 INT4 alpha; the INT4 entry is the "
+                "alpha-search optimum"
+            ),
+            "scales": "Q2 INT4 alphas and INT4 fold/store plan at every bit width; only the bit width changes",
+            "rule": Q3M_RULE,
+            "selection_data": "calibration only; no test file was open when this map was written",
+        }
+        write_json(output / "allocation" / f"{label}.json", payload)
+        allocations[label] = allocation.bits
+        print(
+            f"quantize-q3m: froze {label} at {allocation.final_bytes} bytes (budget {allocation.budget_bytes}), "
+            f"total calibration MSE {allocation.total_mse:.6g}, bits {payload['bit_histogram']}",
+            flush=True,
+        )
+    return allocations, alphas, mse, time.perf_counter() - started
+
+
+def _q3m_load_frozen(output: Path):
+    allocations = {}
+    alphas = None
+    mse = None
+    for label, _bits in Q3M_LABELS:
+        frozen = _read_json(output / "allocation" / f"{label}.json")
+        allocations[label] = {key: int(value) for key, value in frozen["bits"].items()}
+        alphas = {key: float(value) for key, value in frozen["alphas"].items()}
+        mse = {key: {int(b): float(v) for b, v in table.items()} for key, table in frozen["mse_by_bits"].items()}
+    return allocations, alphas, mse
+
+
+def run_quantize_q3m(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
+    """Q3 v2 (q3m): knapsack bit maps from per-bit calibration MSE, then the usual quantize evaluation."""
+    labels = [label for label, _bits in Q3M_LABELS]
+    diag_path = output / "allocation" / "q3m_development_diagnostic.json"
+    if all(_condition_done(output, label) for label in labels) and diag_path.is_file():
+        print("quantize-q3m: q3m_b4 and q3m_b3 already written, nothing to do", flush=True)
+        _write_index(output, labels)
+        return
+    q2 = {4: _read_summary(output, "q2_b4"), 3: _read_summary(output, "q2_b3")}
+    gate = TestFileGate()
+    require_locked(["calibration", "development"], gate)
+    model, tokenizer, modules, census, snapshot = _prepare(output)
+    calibration, development = _load_calibration(gate)
+    print("quantize-q3m: collecting calibration activations", flush=True)
+    stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
+    selection_seconds = None
+    if all((output / "allocation" / f"{label}.json").is_file() for label in labels):
+        allocations, alphas, mse = _q3m_load_frozen(output)
+        _q3m_check_alphas(modules, alphas, q2[4])
+        print("quantize-q3m: reusing frozen q3m maps from", output / "allocation", flush=True)
+    else:
+        restore_state(model, snapshot)
+        allocations, alphas, mse, selection_seconds = _q3m_select(
+            output, model, modules, census, calibration, microbatch, stats, q2
+        )
+    gate.freeze("Q3m bit maps written")
+    modes = _scale_plan(modules, stats, alphas)
+    frozen_maps = {label: dict(bits) for label, bits in allocations.items()}
+    if diag_path.is_file():
+        dev_diag = _read_json(diag_path)
+    else:
+        # Development diagnostic after the freeze. It is not allowed to edit the maps.
+        dev_diag = {}
+        for label in labels:
+            restore_state(model, snapshot)
+            values, recon, folds, _records = _build_quant(modules, stats, "q3m", None, alphas, allocations[label], modes)
+            measured = measure_reconstruction(model, modules, development, microbatch, recon)
+            del recon
+            _commit(model, modules, values, folds)
+            del values
+            scored = development_nll(model, development)
+            dev_diag[label] = {
+                "mean_nll": scored["mean_nll"],
+                "n_tokens": scored["n_tokens"],
+                "mean_projection_mse": float(np.mean([measured[name]["mse"] for name in measured])),
+            }
+            print(f"quantize-q3m: {label} development mean NLL={scored['mean_nll']:.6f}", flush=True)
+        write_json(diag_path, dev_diag)
+    if allocations != frozen_maps:
+        raise RuntimeError("development diagnostic changed a frozen Q3m bit map")
+    restore_state(model, snapshot)
+    wiki, c4, hellaswag = _load_tests(gate)
+    for label in labels:
+        if _condition_done(output, label):
+            print(f"quantize-q3m: {label} already written, skipping", flush=True)
+            _write_index(output, [label])
+            continue
+        print(f"quantize-q3m: {label}", flush=True)
+        restore_state(model, snapshot)
+        started = time.perf_counter()
+        bit_map = allocations[label]
+        values, recon, folds, records = _build_quant(modules, stats, "q3m", None, alphas, bit_map, modes)
+        del recon
+        for record in records:
+            name = record["module"]
+            # The calibration MSE at the assigned width is the frozen table entry (same data, same reconstruction).
+            record["mse"] = mse[name][record["bits"]]
+            record["mse_by_bits"] = {str(b): mse[name][b] for b in (2, 3, 4, 8)}
+            record["sensitivity"] = mse[name][4]
+        _commit(model, modules, values, folds)
+        del values
+        unique_seconds = time.perf_counter() - started
+        storage = _quant_bytes(census, records)
+        wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, label)
+        summary = {
+            "condition": label,
+            "family": "quantize",
+            "method": "q3m",
+            "bits": None,
+            "nominal_bits": storage["nominal_bits"],
+            "achieved_nonzero_fraction": sum(row["nonzero"] for row in records) / census["n_eligible"],
+            "packed_bytes": storage["packed_bytes"],
+            "dense_fp16_bytes": storage["dense_fp16_bytes"],
+            "unstructured_sparse_bytes": storage["unstructured_sparse_bytes"],
+            "storage": storage,
+            "storage_note": "packed_bytes counts the bit payload, 4 metadata bytes per group, serialized FP16 scales, and excluded FP16 tensors with tied weights once. Latency is dense FP16 of the reconstructed weights, not a low-bit kernel.",
+            "calibration_seconds": stat_seconds + unique_seconds,
+            "shared_activation_seconds": stat_seconds,
+            "unique_calibration_seconds": unique_seconds,
+            "selection_seconds": selection_seconds,
+            "selection_note": "INT4 alpha re-search, INT2/3/8 calibration MSE passes and both knapsacks; null when frozen maps were reused.",
+            "calibration_peak_allocated_bytes": stat_peak,
+            "quality": {"hellaswag": hs_summary, "protocol": HELLASWAG_PROTOCOL},
+            "latency": _latency(model, skip_latency),
+            "runtime": _runtime(model),
+            "recipe": {
+                "family": "quantize",
+                "method": "q3m",
+                "bits": None,
+                "alphas": alphas,
+                "bit_map": bit_map,
+            },
+            "projections": records,
+            "q3_development_diagnostic": dev_diag.get(label),
+        }
+        _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
+        _write_index(output, [label])
+    print("quantize-q3m: done", flush=True)
 
 
 def _condition_done(output: Path, condition: str) -> bool:

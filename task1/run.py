@@ -1,4 +1,4 @@
-"""Task 1 stages: unit, smoke, baseline, prune, quantize, resources, analyze.
+"""Task 1 stages: unit, smoke, baseline, prune, quantize, quantize_q3m, resources, analyze.
 
 Run from the repository root:
 
@@ -18,7 +18,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from task1.src.gpu_smoke import run_gpu_smoke
-from task1.src.pipeline import run_analyze, run_baseline, run_prune, run_quantize, run_resources
+from task1.src.pipeline import (
+    run_analyze,
+    run_baseline,
+    run_prune,
+    run_quantize,
+    run_quantize_q3m,
+    run_resources,
+)
 from task1.src.smoke import run_smoke
 
 
@@ -32,7 +39,17 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Task 1 pruning and quantization")
     parser.add_argument(
         "stage",
-        choices=("unit", "smoke", "gpu-smoke", "baseline", "prune", "quantize", "resources", "analyze"),
+        choices=(
+            "unit",
+            "smoke",
+            "gpu-smoke",
+            "baseline",
+            "prune",
+            "quantize",
+            "quantize_q3m",
+            "resources",
+            "analyze",
+        ),
     )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--microbatch", type=int, default=4)
@@ -57,6 +74,8 @@ def main(argv: list[str] | None = None) -> None:
         run_prune(output, args.microbatch, args.skip_latency)
     elif args.stage == "quantize":
         run_quantize(output, args.microbatch, args.skip_latency)
+    elif args.stage == "quantize_q3m":
+        run_quantize_q3m(output, args.microbatch, args.skip_latency)
     elif args.stage == "resources":
         run_resources(output, args.microbatch, args.remeasure)
     elif args.stage == "analyze":
