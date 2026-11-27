@@ -102,12 +102,24 @@ def stage_smoke() -> None:
     run_smoke()
 
 
+def _export_existing(source: Path, target: Path) -> None:
+    """Copy evidence written next to a checkpoint into results/ when only the checkpoint copy exists."""
+    import shutil
+
+    if source.is_file() and not target.is_file():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
+
 def stage_distill() -> None:
     require_cuda("distill")
+    from task3.src.distill import distill_results_dir
+
     for method in METHODS:
         for seed in TRAIN_SEEDS:
             output = checkpoint_dir() / method / f"seed{seed}"
             if (output / "adapter").is_dir():
+                _export_existing(output / "train_log.json", distill_results_dir(method, seed) / "train_log.json")
                 print(f"distill {method} seed {seed}: adapter exists, skipping", flush=True)
                 continue
             _check_deadline(f"distill {method} seed {seed}")
@@ -210,6 +222,10 @@ def stage_baseline() -> None:
     print(f"wrote {results_dir() / 'baseline.json'}", flush=True)
 
 
+def merge_report_path(method: str, seed: int) -> Path:
+    return results_dir() / "merge" / f"{method}_seed{seed}" / "merge_error.json"
+
+
 def stage_merge() -> None:
     require_cuda("merge")
     for method in METHODS:
@@ -218,11 +234,14 @@ def stage_merge() -> None:
             merged = checkpoint_dir() / method / f"seed{seed}" / "merged"
             if not adapter.is_dir():
                 raise SystemExit(f"missing adapter {adapter}. Run the distill stage first.")
+            report = merge_report_path(method, seed)
             if merged.is_dir() and any(merged.glob("*.safetensors")):
+                _export_existing(merged / "merge_error.json", report)
                 print(f"merge {method} seed {seed}: merged draft exists, skipping", flush=True)
                 continue
+            _check_deadline(f"merge {method} seed {seed}")
             print(f"merging {method} seed {seed}", flush=True)
-            merge_adapter_into_fresh_backbone(adapter, merged)
+            merge_adapter_into_fresh_backbone(adapter, merged, report_path=report)
 
 
 def _standalone(model, tokenizer, examples) -> list[dict]:
@@ -383,8 +402,8 @@ def stage_analyze() -> None:
     }
     for method in METHODS:
         for seed in TRAIN_SEEDS:
-            expected[f"distill_{method}_{seed}"] = checkpoint_dir() / method / f"seed{seed}" / "train_log.json"
-            expected[f"merge_{method}_{seed}"] = checkpoint_dir() / method / f"seed{seed}" / "merged" / "merge_error.json"
+            expected[f"distill_{method}_{seed}"] = results_dir() / "distill" / f"{method}_seed{seed}" / "train_log.json"
+            expected[f"merge_{method}_{seed}"] = merge_report_path(method, seed)
     missing = [name for name, path in expected.items() if not path.is_file()]
     report: dict = {
         "missing": missing,

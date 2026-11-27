@@ -454,22 +454,73 @@ def load_lora_student(seed: int):
     return model, tokenizer, trainable
 
 
-def response_kl_tensor(teacher, student, prompt_ids: Sequence[int], response_ids: Sequence[int]) -> torch.Tensor:
+class PhaseClock:
+    """Synchronized wall time per training phase (teacher rollout, scoring, backward, ...)."""
+
+    def __init__(self) -> None:
+        self.seconds: dict[str, float] = {}
+        self.calls: dict[str, int] = {}
+
+    def measure(self, name: str):
+        from contextlib import contextmanager
+
+        from shared.timing import cuda_sync
+
+        @contextmanager
+        def _span():
+            cuda_sync()
+            start = time.perf_counter()
+            try:
+                yield
+            finally:
+                cuda_sync()
+                self.seconds[name] = self.seconds.get(name, 0.0) + time.perf_counter() - start
+                self.calls[name] = self.calls.get(name, 0) + 1
+
+        return _span()
+
+
+def _null_span():
+    from contextlib import nullcontext
+
+    return nullcontext()
+
+
+def _autocast(device: torch.device):
+    if device.type == "cuda":
+        return torch.autocast(device_type="cuda", dtype=torch.float16)
+    return _null_span()
+
+
+def response_kl_tensor(teacher, student, prompt_ids: Sequence[int], response_ids: Sequence[int], clock: PhaseClock | None = None) -> torch.Tensor:
+    """Per-token KL(teacher || student) at every response position of one microbatch.
+
+    One forward of prompt + response through each model; the logit at index
+    len(prompt) - 1 + j is the next-token distribution before response token j.
+    The teacher pass is under no_grad; temperature is 1 for both models.
+    """
     if not response_ids:
         raise ValueError("response prefix is empty")
     ids = list(prompt_ids) + list(response_ids)
-    input_ids = torch.tensor([ids], dtype=torch.long, device="cuda")
-    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16):
-        teacher_logits = teacher(input_ids=input_ids, use_cache=False).logits
-    with torch.autocast(device_type="cuda", dtype=torch.float16):
-        student_logits = student(input_ids=input_ids, use_cache=False).logits
-    return response_token_kl(teacher_logits, student_logits, len(prompt_ids), len(response_ids))
+    device = next(student.parameters()).device
+    input_ids = torch.tensor([ids], dtype=torch.long, device=device)
+    with clock.measure("teacher_scoring") if clock else _null_span():
+        with torch.no_grad(), _autocast(device):
+            teacher_logits = teacher(input_ids=input_ids, use_cache=False).logits
+    with clock.measure("student_forward_and_loss") if clock else _null_span():
+        with _autocast(device):
+            student_logits = student(input_ids=input_ids, use_cache=False).logits
+        if teacher_logits.shape[-1] != student_logits.shape[-1]:
+            raise RuntimeError("teacher and student vocabularies differ; the KL needs the common full vocabulary")
+        return response_token_kl(teacher_logits, student_logits, len(prompt_ids), len(response_ids))
 
 
-def scaled_optimizer_step(scaler, optimizer, parameters: Sequence[torch.nn.Parameter], n_tokens: int) -> bool:
+def scaled_optimizer_step(scaler, optimizer, parameters: Sequence[torch.nn.Parameter], n_tokens: int) -> dict:
     """Unscale, divide by the supervised tokens, clip, then step.
 
-    Returns True when GradScaler skips the step because of non-finite gradients.
+    Returns `skipped` (GradScaler found non-finite gradients and skipped the
+    step), the pre-clip global gradient norm of the token-averaged loss, and the
+    loss scale before and after the update.
     """
     if n_tokens < 1:
         raise ValueError("refusing an empty optimizer step")
@@ -477,21 +528,37 @@ def scaled_optimizer_step(scaler, optimizer, parameters: Sequence[torch.nn.Param
     for parameter in parameters:
         if parameter.grad is not None:
             parameter.grad.div_(n_tokens)
-    torch.nn.utils.clip_grad_norm_(parameters, GRAD_CLIP)
+    grad_norm = float(torch.nn.utils.clip_grad_norm_(parameters, GRAD_CLIP))
     scale_before = float(scaler.get_scale())
     scaler.step(optimizer)
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
-    return float(scaler.get_scale()) < scale_before
+    scale_after = float(scaler.get_scale())
+    return {
+        "skipped": scale_after < scale_before,
+        "grad_norm_before_clip": grad_norm if math.isfinite(grad_norm) else None,
+        "loss_scale_before": scale_before,
+        "loss_scale_after": scale_after,
+    }
 
 
 @dataclass
 class UpdateAccumulator:
+    """Groups supervised tokens into optimizer updates of `step_tokens` (last may be short).
+
+    The logged loss is the token-averaged forward KL of the update, which is
+    also the objective the gradient was normalized by.
+    """
+
     step_tokens: int = STEP_TOKENS
     pending_count: int = 0
     pending_value: float = 0.0
     updates: list[dict] = field(default_factory=list)
     skipped_steps: int = 0
+    scored_tokens: int = 0
+    clock: PhaseClock | None = None
+    pending_categories: dict[str, int] = field(default_factory=dict)
+    category: str = ""
 
     def add_kl(self, kl: torch.Tensor, scaler, optimizer, parameters) -> None:
         offset = 0
@@ -500,8 +567,11 @@ class UpdateAccumulator:
             room = self.step_tokens - self.pending_count
             take = min(room, total - offset)
             chunk = kl[offset : offset + take]
-            scaler.scale(chunk.sum()).backward(retain_graph=offset + take < total)
+            with self.clock.measure("backward") if self.clock else _null_span():
+                scaler.scale(chunk.sum()).backward(retain_graph=offset + take < total)
             self.pending_count += take
+            self.scored_tokens += take
+            self.pending_categories[self.category] = self.pending_categories.get(self.category, 0) + take
             self.pending_value += float(chunk.detach().sum().cpu())
             offset += take
             if self.pending_count == self.step_tokens:
@@ -514,21 +584,25 @@ class UpdateAccumulator:
     def _flush(self, scaler, optimizer, parameters) -> None:
         n_tokens = self.pending_count
         loss = self.pending_value / n_tokens
-        skipped = scaled_optimizer_step(scaler, optimizer, parameters, n_tokens)
-        self.skipped_steps += int(skipped)
+        with self.clock.measure("optimizer") if self.clock else _null_span():
+            step = scaled_optimizer_step(scaler, optimizer, parameters, n_tokens)
+        self.skipped_steps += int(step["skipped"])
         self.updates.append(
             {
                 "step": len(self.updates) + 1,
                 "loss": loss,
-                "learning_rate": LEARNING_RATE,
+                "learning_rate": float(optimizer.param_groups[0]["lr"]),
                 "tokens_in_update": n_tokens,
+                "teacher_scored_tokens_cumulative": self.scored_tokens,
+                "tokens_by_category": dict(self.pending_categories),
                 "short_update": n_tokens != self.step_tokens,
-                "skipped": skipped,
+                **step,
                 "wall_time_s": time.perf_counter(),
             }
         )
         self.pending_count = 0
         self.pending_value = 0.0
+        self.pending_categories = {}
 
 
 def _category_cap(category: str) -> int:
@@ -570,6 +644,7 @@ def _generate_category(
     quota: int,
     eos_id: int | None,
     stop_at_quota: bool,
+    clock: PhaseClock | None = None,
 ) -> list[RolloutRecord]:
     """Round-robin generation until the category quota is covered.
 
@@ -587,13 +662,14 @@ def _generate_category(
         remaining = quota - covered
         max_new = min(cap, remaining) if stop_at_quota else cap
         prompt_ids = render_chat(tokenizer, example.text)
-        tokens, reason = sample_response(
-            model,
-            prompt_ids,
-            max_new_tokens=max_new,
-            eos_id=eos_id,
-            rng=np.random.default_rng(seed),
-        )
+        with clock.measure("teacher_rollout_prep") if clock else _null_span():
+            tokens, reason = sample_response(
+                model,
+                prompt_ids,
+                max_new_tokens=max_new,
+                eos_id=eos_id,
+                rng=np.random.default_rng(seed),
+            )
         scored = min(len(tokens), remaining)
         if scored < len(tokens) or (reason == "length" and max_new < cap):
             reason = "truncated_quota"
@@ -653,13 +729,14 @@ def _on_policy_category(
         max_new = min(cap, remaining)
         prompt_ids = render_chat(tokenizer, example.text)
         student.eval()
-        tokens, reason = sample_response(
-            student,
-            prompt_ids,
-            max_new_tokens=max_new,
-            eos_id=eos_id,
-            rng=np.random.default_rng(seed),
-        )
+        with accumulator.clock.measure("student_rollout") if accumulator.clock else _null_span():
+            tokens, reason = sample_response(
+                student,
+                prompt_ids,
+                max_new_tokens=max_new,
+                eos_id=eos_id,
+                rng=np.random.default_rng(seed),
+            )
         scored = min(len(tokens), remaining)
         if scored < len(tokens) or (reason == "length" and max_new < cap):
             reason = "truncated_quota"
@@ -690,6 +767,7 @@ def _score_records(teacher, student, records: Sequence[RolloutRecord], accumulat
         scored_ids = record.scored_token_ids()
         if not scored_ids:
             continue
+        accumulator.category = record.category
         offset = 0
         while offset < len(scored_ids):
             room = accumulator.step_tokens - accumulator.pending_count
@@ -697,9 +775,39 @@ def _score_records(teacher, student, records: Sequence[RolloutRecord], accumulat
             # A fresh forward of the scored prefix. Only the newly included tail
             # enters this microbatch, so a response can cross a 256-token boundary.
             prefix = scored_ids[: offset + take]
-            kl = response_kl_tensor(teacher, student, record.prompt_token_ids, prefix)[offset:]
+            kl = response_kl_tensor(teacher, student, record.prompt_token_ids, prefix, accumulator.clock)[offset:]
             accumulator.add_kl(kl, scaler, optimizer, parameters)
             offset += take
+
+
+def distill_results_dir(method: str, seed: int) -> Path:
+    """Exported copy of the training evidence (results/ is what leaves the GPU box)."""
+    from shared.paths import REPO_ROOT
+
+    return REPO_ROOT / "results" / "task3" / "distill" / f"{method}_seed{seed}"
+
+
+def _length_summary(records: Sequence[RolloutRecord]) -> dict:
+    if not records:
+        return {"n_presentations": 0}
+    lengths = np.asarray([len(record.token_ids) for record in records], dtype=np.float64)
+    scored = np.asarray([record.teacher_scored_tokens for record in records], dtype=np.float64)
+    reasons: dict[str, int] = {}
+    for record in records:
+        reasons[record.termination_reason] = reasons.get(record.termination_reason, 0) + 1
+    return {
+        "n_presentations": len(records),
+        "n_unique_prompts": len({record.source_id for record in records}),
+        "generated_tokens_total": int(lengths.sum()),
+        "generated_tokens_mean": float(lengths.mean()),
+        "generated_tokens_median": float(np.median(lengths)),
+        "generated_tokens_max": int(lengths.max()),
+        "scored_tokens_total": int(scored.sum()),
+        "unscored_generated_tokens": int(lengths.sum() - scored.sum()),
+        "termination_reasons": reasons,
+        "at_response_cap": int(sum(1 for record in records if len(record.token_ids) >= record.response_cap)),
+        "quota_truncated": int(sum(1 for record in records if record.termination_reason == "truncated_quota")),
+    }
 
 
 def train_method(
@@ -708,129 +816,171 @@ def train_method(
     output_dir: Path,
     *,
     data_root: Path | None = None,
+    results_out: Path | None = None,
 ) -> dict:
-    """Train one seed. Refuses to run, and does not download weights, without CUDA."""
+    """Train one seed. Refuses to run, and does not download weights, without CUDA.
+
+    Writes train_log.json and rollouts.jsonl.gz both next to the adapter and
+    under results/task3/distill/{method}_seed{seed}/ so the evidence is exported.
+    """
     if loss_for_method(method) != LOSS_NAME:
         raise RuntimeError("on-policy training must stay on forward KL")
     _require_cuda(f"distill {method} seed {seed}")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    results_out = distill_results_dir(method, seed) if results_out is None else Path(results_out)
     math_examples, short_examples = load_training_pool(data_root)
     evaluation = load_eval_pool(data_root)
     assert_no_eval_leak([*math_examples, *short_examples], evaluation)
 
     torch.cuda.reset_peak_memory_stats()
+    clock = PhaseClock()
     started = time.perf_counter()
-    teacher, teacher_tokenizer = load_frozen_causal(TARGET_MODEL)
-    student, student_tokenizer, trainable = load_lora_student(seed)
+    with clock.measure("model_load"):
+        teacher, teacher_tokenizer = load_frozen_causal(TARGET_MODEL)
+        student, student_tokenizer, trainable = load_lora_student(seed)
     assert_same_token_ids(teacher_tokenizer, student_tokenizer)
     counts = parameter_report(student)
+    teacher_counts = parameter_report(teacher)
+    trainable_names = [name for name, parameter in student.named_parameters() if parameter.requires_grad]
+    if not trainable_names_match_targets(trainable_names):
+        raise RuntimeError("trainable parameters are not exactly the LoRA q/k/v/o adapters")
+    if any(parameter.dtype != torch.float32 for parameter in trainable):
+        raise RuntimeError("adapter parameters must be FP32")
     optimizer = torch.optim.AdamW(trainable, lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     scaler = torch.amp.GradScaler("cuda")
     eos_id = None if teacher_tokenizer.eos_token_id is None else int(teacher_tokenizer.eos_token_id)
-    accumulator = UpdateAccumulator()
+    accumulator = UpdateAccumulator(clock=clock)
 
     optimizer.zero_grad(set_to_none=True)
     teacher.eval()
-    generation_started = time.perf_counter()
-    scoring_s = 0.0
+    loop_started = time.perf_counter()
     if method == "off_policy":
-        math_records = _generate_category(
-            teacher,
-            teacher_tokenizer,
-            math_examples,
-            category="math",
-            train_seed=seed,
-            method=method,
-            quota=MATH_QUOTA,
-            eos_id=eos_id,
-            stop_at_quota=False,
-        )
-        short_records = _generate_category(
-            teacher,
-            teacher_tokenizer,
-            short_examples,
-            category="short",
-            train_seed=seed,
-            method=method,
-            quota=SHORT_QUOTA,
-            eos_id=eos_id,
-            stop_at_quota=False,
-        )
-        generation_s = time.perf_counter() - generation_started
-        scoring_started = time.perf_counter()
+        pools = {}
+        for category, examples, quota in (("math", math_examples, MATH_QUOTA), ("short", short_examples, SHORT_QUOTA)):
+            pools[category] = _generate_category(
+                teacher,
+                teacher_tokenizer,
+                examples,
+                category=category,
+                train_seed=seed,
+                method=method,
+                quota=quota,
+                eos_id=eos_id,
+                stop_at_quota=False,
+                clock=clock,
+            )
+        math_records, short_records = pools["math"], pools["short"]
         _score_records(teacher, student, math_records + short_records, accumulator, scaler, optimizer, trainable)
         accumulator.flush(scaler, optimizer, trainable)
-        scoring_s = time.perf_counter() - scoring_started
     else:
         # Generate from the student that will actually be updated, then score
         # that rollout before drawing the next one. Stepping inside the rollout
         # does not rewrite tokens that were already sampled.
-        math_records = _on_policy_category(
-            student,
-            student_tokenizer,
-            teacher,
-            math_examples,
-            category="math",
-            train_seed=seed,
-            quota=MATH_QUOTA,
-            eos_id=eos_id,
-            accumulator=accumulator,
-            scaler=scaler,
-            optimizer=optimizer,
-            parameters=trainable,
-        )
-        short_records = _on_policy_category(
-            student,
-            student_tokenizer,
-            teacher,
-            short_examples,
-            category="short",
-            train_seed=seed,
-            quota=SHORT_QUOTA,
-            eos_id=eos_id,
-            accumulator=accumulator,
-            scaler=scaler,
-            optimizer=optimizer,
-            parameters=trainable,
-        )
+        on_policy = {}
+        for category, examples, quota in (("math", math_examples, MATH_QUOTA), ("short", short_examples, SHORT_QUOTA)):
+            on_policy[category] = _on_policy_category(
+                student,
+                student_tokenizer,
+                teacher,
+                examples,
+                category=category,
+                train_seed=seed,
+                quota=quota,
+                eos_id=eos_id,
+                accumulator=accumulator,
+                scaler=scaler,
+                optimizer=optimizer,
+                parameters=trainable,
+            )
+        math_records, short_records = on_policy["math"], on_policy["short"]
         accumulator.flush(scaler, optimizer, trainable)
-        generation_s = time.perf_counter() - generation_started
+    loop_s = time.perf_counter() - loop_started
     records = math_records + short_records
+    peak = int(torch.cuda.max_memory_allocated())
 
     adapter_dir = output_dir / "adapter"
-    student.save_pretrained(adapter_dir)
-    student_tokenizer.save_pretrained(adapter_dir)
-    _write_jsonl(output_dir / "rollouts.jsonl", [_public_rollout(record) for record in records])
-    peak = int(torch.cuda.max_memory_allocated())
-    origin = started
+    with clock.measure("adapter_save"):
+        student.save_pretrained(adapter_dir)
+        student_tokenizer.save_pretrained(adapter_dir)
+    rollouts = [_public_rollout(record) for record in records]
+    _write_jsonl(output_dir / "rollouts.jsonl", rollouts)
+    _write_jsonl_gz(results_out / "rollouts.jsonl.gz", rollouts)
     for update in accumulator.updates:
-        update["wall_time_s"] = float(update["wall_time_s"] - origin)
+        update["wall_time_s"] = float(update["wall_time_s"] - started)
+    phases = dict(clock.seconds)
+    # Off-policy pays for an offline teacher-response pool; on-policy pays for student rollouts.
+    generation_s = phases.get("teacher_rollout_prep", 0.0) + phases.get("student_rollout", 0.0)
+    training_s = sum(phases.get(name, 0.0) for name in ("teacher_scoring", "student_forward_and_loss", "backward", "optimizer"))
+    total_s = time.perf_counter() - started
     summary = {
         "method": method,
         "seed": seed,
         "loss": LOSS_NAME,
+        "kl_direction": "KL(p_teacher || q_student), full common vocabulary, temperature 1",
+        "lora": {
+            "r": LORA_R,
+            "alpha": LORA_ALPHA,
+            "dropout": LORA_DROPOUT,
+            "target_modules": list(LORA_TARGET_MODULES),
+            "n_trainable_tensors": len(trainable_names),
+            "trainable_parameter_names_sample": trainable_names[:8],
+        },
         "parameters": counts,
+        "parameter_counts": {
+            "student_backbone_frozen": counts["frozen"],
+            "adapter_trainable": counts["trainable"],
+            "student_total_with_adapter": counts["total"],
+            "teacher_total": teacher_counts["total"],
+        },
         "math_scored_tokens": sum(record.teacher_scored_tokens for record in math_records),
         "short_scored_tokens": sum(record.teacher_scored_tokens for record in short_records),
+        "teacher_scored_tokens_total": accumulator.scored_tokens,
+        "rollouts": {"math": _length_summary(math_records), "short": _length_summary(short_records)},
         "optimizer_steps": len(accumulator.updates),
         "skipped_or_overflowed_steps": accumulator.skipped_steps,
+        "skipped_steps": [update["step"] for update in accumulator.updates if update["skipped"]],
         "short_final_update": bool(accumulator.updates and accumulator.updates[-1]["short_update"]),
+        "phase_seconds": phases,
+        "phase_calls": dict(clock.calls),
+        "offline_teacher_response_preparation_s": phases.get("teacher_rollout_prep", 0.0),
+        "student_rollout_s": phases.get("student_rollout", 0.0),
+        "teacher_scoring_s": phases.get("teacher_scoring", 0.0),
+        "student_forward_and_loss_s": phases.get("student_forward_and_loss", 0.0),
+        "backward_s": phases.get("backward", 0.0),
+        "optimizer_s": phases.get("optimizer", 0.0),
         "generation_wall_time_s": generation_s,
-        "scoring_wall_time_s": scoring_s,
+        "scoring_and_training_wall_time_s": training_s,
+        "training_loop_wall_time_s": loop_s,
         "on_policy_times_are_interleaved": method == "on_policy",
         "mean_generated_tokens": float(np.mean([len(record.token_ids) for record in records])),
         "mean_scored_tokens": float(np.mean([record.teacher_scored_tokens for record in records])),
-        "wall_time_s": time.perf_counter() - started,
+        "wall_time_s": total_s,
+        "end_to_end_cost_s": total_s,
         "peak_memory_bytes": peak,
         "learning_rate": LEARNING_RATE,
         "weight_decay": WEIGHT_DECAY,
+        "grad_clip": GRAD_CLIP,
         "step_tokens": STEP_TOKENS,
+        "category_order": ["math", "short"],
+        "loss_vs_teacher_scored_tokens": [
+            [update["teacher_scored_tokens_cumulative"], update["loss"]] for update in accumulator.updates
+        ],
         "updates": accumulator.updates,
         "adapter_dir": str(adapter_dir),
     }
     _write_json(output_dir / "train_log.json", summary)
+    _write_json(results_out / "train_log.json", summary)
     return summary
+
+
+def _write_jsonl_gz(path: Path, rows: Iterable[dict]) -> None:
+    import gzip
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def _public_rollout(record: RolloutRecord) -> dict:
@@ -838,33 +988,87 @@ def _public_rollout(record: RolloutRecord) -> dict:
     return payload
 
 
-def merge_adapter_into_fresh_backbone(adapter_dir: Path, merged_dir: Path) -> dict[str, float]:
-    """Merge LoRA into a newly loaded FP16 0.5B copy and record the logit error."""
+MERGE_PROBE_PROMPTS = TOKEN_CHECK_PROMPTS + (
+    "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?",
+    "Read this report date: May 25, 2020. Return only the month.",
+    "Shipping label: destination code PK, serial 253. Output the destination code.",
+)
+
+
+def merge_adapter_into_fresh_backbone(adapter_dir: Path, merged_dir: Path, report_path: Path | None = None) -> dict[str, float]:
+    """Merge LoRA into a newly loaded FP16 0.5B copy and record the logit error.
+
+    The probe batch is MERGE_PROBE_PROMPTS (fixed, chat-formatted, one forward
+    each). The unmerged PEFT model (FP16 base, FP32 adapter, FP16 autocast) and
+    the merged FP16 model see the same ids. Merge wall time is the deployment
+    cost that goes into the break-even calculation. The report is written next
+    to the merged weights and, when given, to `report_path` under results/.
+    """
     from peft import PeftModel
+
+    from shared.timing import cuda_sync
 
     _require_cuda("adapter merge")
     adapter_dir = Path(adapter_dir)
     merged_dir = Path(merged_dir)
+    cuda_sync()
+    started = time.perf_counter()
     base, tokenizer = load_frozen_causal(DRAFT_MODEL)
     peft_model = PeftModel.from_pretrained(base, adapter_dir)
     peft_model.eval()
-    probe = render_chat(tokenizer, TOKEN_CHECK_PROMPTS[0])
-    input_ids = torch.tensor([probe], dtype=torch.long, device="cuda")
+    cuda_sync()
+    load_s = time.perf_counter() - started
+    probes = [render_chat(tokenizer, prompt) for prompt in MERGE_PROBE_PROMPTS]
+    unmerged = []
     with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16):
-        unmerged = peft_model(input_ids=input_ids, use_cache=False).logits.float()
+        for probe in probes:
+            ids = torch.tensor([probe], dtype=torch.long, device="cuda")
+            unmerged.append(peft_model(input_ids=ids, use_cache=False).logits.float()[0])
+    cuda_sync()
+    merge_started = time.perf_counter()
     merged = peft_model.merge_and_unload()
     merged.eval()
+    cuda_sync()
+    merge_s = time.perf_counter() - merge_started
+    max_abs = 0.0
+    abs_sum = 0.0
+    n_values = 0
+    prob_max_abs = 0.0
+    argmax_agree = 0
+    n_positions = 0
     with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16):
-        merged_logits = merged(input_ids=input_ids, use_cache=False).logits.float()
-    error = (unmerged - merged_logits).abs()
+        for probe, reference in zip(probes, unmerged):
+            ids = torch.tensor([probe], dtype=torch.long, device="cuda")
+            logits = merged(input_ids=ids, use_cache=False).logits.float()[0]
+            error = (reference - logits).abs()
+            max_abs = max(max_abs, float(error.max()))
+            abs_sum += float(error.sum())
+            n_values += int(error.numel())
+            prob_gap = (torch.softmax(reference, -1) - torch.softmax(logits, -1)).abs().max()
+            prob_max_abs = max(prob_max_abs, float(prob_gap))
+            argmax_agree += int((reference.argmax(-1) == logits.argmax(-1)).sum())
+            n_positions += int(reference.shape[0])
+    save_started = time.perf_counter()
     merged.save_pretrained(merged_dir)
     tokenizer.save_pretrained(merged_dir)
+    save_s = time.perf_counter() - save_started
     report = {
-        "max_abs_logit_error": float(error.max().cpu()),
-        "mean_abs_logit_error": float(error.mean().cpu()),
-        "probe_tokens": len(probe),
+        "adapter_dir": str(adapter_dir),
+        "probe_prompts": list(MERGE_PROBE_PROMPTS),
+        "probe_tokens": [len(probe) for probe in probes],
+        "max_abs_logit_error": max_abs,
+        "mean_abs_logit_error": abs_sum / max(1, n_values),
+        "max_abs_probability_error": prob_max_abs,
+        "argmax_agreement": argmax_agree / max(1, n_positions),
+        "n_positions": n_positions,
+        "load_s": load_s,
+        "merge_s": merge_s,
+        "save_s": save_s,
+        "merge_cost_s": load_s + merge_s + save_s,
     }
-    _write_json(Path(merged_dir) / "merge_error.json", report)
+    _write_json(merged_dir / "merge_error.json", report)
+    if report_path is not None:
+        _write_json(Path(report_path), report)
     return report
 
 
