@@ -16,8 +16,8 @@ from typing import Sequence
 import numpy as np
 import torch
 
-from shared.paths import REPO_ROOT
 from shared.timing import cuda_sync, time_call
+from task3.src import runtime
 from task3.src.distill import (
     DRAFT_MODEL,
     TARGET_MODEL,
@@ -42,8 +42,6 @@ DIAGNOSTIC_MATH_PROMPTS = 24
 DIAGNOSTIC_MAX_NEW = 64
 GAMMAS = (2, 4)
 PAIRED_REPETITIONS = 2
-RESULTS_DIR = REPO_ROOT / "results" / "task3"
-CHECKPOINT_DIR = REPO_ROOT / "checkpoints" / "task3"
 
 _NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 _GSM_MARK = re.compile(r"####\s*\$?\s*(-?\d[\d,]*(?:\.\d+)?)")
@@ -51,11 +49,12 @@ _BOXED = re.compile(r"\\boxed\{([^{}]*)\}")
 
 
 def results_dir() -> Path:
-    return RESULTS_DIR
+    """results/task3, or results/task3_smoke in a smoke run."""
+    return runtime.results_dir()
 
 
 def checkpoint_dir() -> Path:
-    return CHECKPOINT_DIR
+    return runtime.checkpoint_dir()
 
 
 def repetition_order(repetition: int) -> tuple[str, str]:
@@ -615,6 +614,7 @@ def run_smoke() -> dict:
         "token_id_prompts": list(TOKEN_CHECK_PROMPTS),
         "target": TARGET_MODEL,
         "draft": DRAFT_MODEL,
+        "revisions": {name: runtime.pinned_revision(name) for name in (TARGET_MODEL, DRAFT_MODEL)},
     }
     _dump(results_dir() / "smoke.json", report)
     if failures:
@@ -623,16 +623,11 @@ def run_smoke() -> dict:
 
 
 def _dump(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n", encoding="utf-8")
+    """Atomic, numpy-safe JSON write; a smoke run adds a SMOKE_RUN marker."""
+    runtime.dump_json(path, payload)
 
 
-def _json_default(value):
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, np.generic):
-        return value.item()
-    raise TypeError(f"cannot encode {type(value)!r}")
+_json_default = runtime.json_default
 
 
 def load_result(name: str) -> dict:

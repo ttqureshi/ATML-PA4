@@ -421,13 +421,21 @@ def _require_cuda(action: str) -> None:
 
 
 def load_frozen_causal(model_name: str, dtype=torch.float16):
+    """Frozen model on CUDA. Hub repos load at the commit pinned in the course revision lock."""
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=dtype,
-        attn_implementation="sdpa",
+    from task3.src.runtime import pinned_revision, with_retries
+
+    revision = pinned_revision(model_name)
+    tokenizer = with_retries(lambda: AutoTokenizer.from_pretrained(model_name, revision=revision), f"tokenizer {model_name}")
+    model = with_retries(
+        lambda: AutoModelForCausalLM.from_pretrained(
+            model_name,
+            revision=revision,
+            torch_dtype=dtype,
+            attn_implementation="sdpa",
+        ),
+        f"model {model_name}",
     )
     model.to("cuda")
     model.eval()
@@ -622,15 +630,15 @@ def _category_quota(category: str) -> int:
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    from task3.src.runtime import dump_json
+
+    dump_json(Path(path), payload)
 
 
 def _write_jsonl(path: Path, rows: Iterable[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
+    from task3.src.runtime import atomic_write_text, json_default
+
+    atomic_write_text(Path(path), "".join(json.dumps(row, sort_keys=True, default=json_default) + "\n" for row in rows))
 
 
 def _generate_category(
@@ -782,9 +790,9 @@ def _score_records(teacher, student, records: Sequence[RolloutRecord], accumulat
 
 def distill_results_dir(method: str, seed: int) -> Path:
     """Exported copy of the training evidence (results/ is what leaves the GPU box)."""
-    from shared.paths import REPO_ROOT
+    from task3.src.runtime import results_dir
 
-    return REPO_ROOT / "results" / "task3" / "distill" / f"{method}_seed{seed}"
+    return results_dir() / "distill" / f"{method}_seed{seed}"
 
 
 def _length_summary(records: Sequence[RolloutRecord]) -> dict:
@@ -833,7 +841,8 @@ def train_method(
     evaluation = load_eval_pool(data_root)
     assert_no_eval_leak([*math_examples, *short_examples], evaluation)
 
-    torch.cuda.reset_peak_memory_stats()
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
     clock = PhaseClock()
     started = time.perf_counter()
     with clock.measure("model_load"):
@@ -897,7 +906,7 @@ def train_method(
         accumulator.flush(scaler, optimizer, trainable)
     loop_s = time.perf_counter() - loop_started
     records = math_records + short_records
-    peak = int(torch.cuda.max_memory_allocated())
+    peak = int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else 0
 
     adapter_dir = output_dir / "adapter"
     with clock.measure("adapter_save"):
@@ -976,11 +985,17 @@ def train_method(
 
 def _write_jsonl_gz(path: Path, rows: Iterable[dict]) -> None:
     import gzip
+    import os
 
+    from task3.src.runtime import json_default
+
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(path, "wt", encoding="utf-8") as handle:
+    tmp = path.with_name(f".{path.name}.tmp")
+    with gzip.open(tmp, "wt", encoding="utf-8") as handle:
         for row in rows:
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
+            handle.write(json.dumps(row, sort_keys=True, default=json_default) + "\n")
+    os.replace(tmp, path)
 
 
 def _public_rollout(record: RolloutRecord) -> dict:
@@ -1019,10 +1034,11 @@ def merge_adapter_into_fresh_backbone(adapter_dir: Path, merged_dir: Path, repor
     cuda_sync()
     load_s = time.perf_counter() - started
     probes = [render_chat(tokenizer, prompt) for prompt in MERGE_PROBE_PROMPTS]
+    device = next(base.parameters()).device
     unmerged = []
-    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16):
+    with torch.no_grad(), _autocast(device):
         for probe in probes:
-            ids = torch.tensor([probe], dtype=torch.long, device="cuda")
+            ids = torch.tensor([probe], dtype=torch.long, device=device)
             unmerged.append(peft_model(input_ids=ids, use_cache=False).logits.float()[0])
     cuda_sync()
     merge_started = time.perf_counter()
@@ -1036,9 +1052,9 @@ def merge_adapter_into_fresh_backbone(adapter_dir: Path, merged_dir: Path, repor
     prob_max_abs = 0.0
     argmax_agree = 0
     n_positions = 0
-    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16):
+    with torch.no_grad(), _autocast(device):
         for probe, reference in zip(probes, unmerged):
-            ids = torch.tensor([probe], dtype=torch.long, device="cuda")
+            ids = torch.tensor([probe], dtype=torch.long, device=device)
             logits = merged(input_ids=ids, use_cache=False).logits.float()[0]
             error = (reference - logits).abs()
             max_abs = max(max_abs, float(error.max()))

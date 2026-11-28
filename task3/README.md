@@ -9,19 +9,20 @@ python -m unittest discover -s task3/tests -v
 python task3/run.py unit
 ```
 
-GPU stages, in order, after `setup_data.py --public` and `--prefix-banks` on a CUDA machine: `smoke`, `baseline`, `distill`, `merge`, `align`, `eval`, `analyze` (`analyze` is CPU-only). Do not run the GPU stages on this CPU checkout. `align` reports no speed, so it may run on a second GPU (`CUDA_VISIBLE_DEVICES=1`) while `eval` times on the first; never run it next to `baseline` or `eval` on the same GPU.
+GPU stages, in order, after `setup_data.py --public` on a CUDA machine (`PA4_DATA_REPO` points at the data repo): `prefix_banks`, `smoke`, `baseline`, `distill`, `merge`, `align`, `eval`, `analyze` (`analyze` is CPU-only). Do not run the GPU stages on this CPU checkout. `align` reports no speed, so it may run on a second GPU (`CUDA_VISIBLE_DEVICES=1`) while `eval` times on the first; never run it next to `baseline` or `eval` on the same GPU.
 
 | Stage | Needs | Writes (under `results/task3/`) |
 |---|---|---|
+| `prefix_banks` | CUDA, `data/local_source_revisions.json`, `data/public_locked/gsm8k_test_locked.jsonl.gz`, `data/short_form/short_test.jsonl` | `$PA4_DATA_REPO/data/prefix_banks/prefix_banks_locked.jsonl.gz` and `prefix_banks_build.json` (also under `results/task3/`; parts in `prefix_bank_parts/`) |
 | `smoke` | CUDA | `smoke.json`: token-id check; FP16 split-prefill and cache numbers (diagnostic); FP32 split-prefill, cached next logits and per-layer K/V vs a one-pass cache, hard-gated at `PA4_T3_FP32_GATE` (default `1e-3`) |
 | `baseline` | CUDA | `baseline.json` (parts in `baseline_parts/`): original draft, gamma 2 and 4, 120 prompts x 2 paired repetitions, warm setup, isolated costs at 32/128/512 cached tokens, and the 24-prompt ignore-EOS math diagnostic |
 | `distill` | CUDA | adapters in `checkpoints/task3/`; `distill/{method}_seed{seed}/train_log.json` and `rollouts.jsonl.gz` |
 | `merge` | CUDA | merged FP16 drafts in `checkpoints/task3/`; `merge/{method}_seed{seed}/merge_error.json` (8-prompt logit error, merge cost) |
-| `align` | CUDA, merged drafts, `$PA4_DATA_REPO/data/prefix_banks/prefix_banks_locked.jsonl.gz` | `alignment.json`, `alignment_rows.jsonl.gz` (parts in `align_parts/`) |
+| `align` | CUDA, merged drafts, the `prefix_banks` output | `alignment.json`, `alignment_rows.jsonl.gz` (parts in `align_parts/`) |
 | `eval` | CUDA, merged drafts, the off-policy seed-6304 adapter | `eval.json` (parts in `eval_parts/`): speed rows, ignore-EOS diagnostic, unmerged-adapter wrapper overhead, standalone accuracy, matched continuations |
 | `analyze` | the files above | `analyze.json` |
 
-`align` fails if the supplied prefix-bank file is missing. With `PA4_DEADLINE` (unix seconds) set, every stage exits with code 75 before a piece that could overrun; rerunning resumes from the cached parts.
+`align` fails if the supplied prefix-bank file is missing or does not cover all 120 evaluation prompts in both banks. Every stage checks its inputs (data counts 60/30/30 and 500/300, adapters, merged drafts, bank coverage) before it loads a model. Writes are atomic; an unreadable or older-version cache part, an adapter without its `train_log.json`, or a merged draft without its `merge_error.json` is rebuilt. Hub models load at the commits in `data/local_source_revisions.json`. With `PA4_DEADLINE` (unix seconds) set, every stage exits with code 75 before a piece that could overrun; rerunning resumes from the cached parts.
 
 ## Sampler contract
 
@@ -74,3 +75,17 @@ Standalone accuracy: math answers are taken from `oxed{}`, then a `####` marker
 Prefix metrics are token-weighted forward KL, reverse KL, total variation, greedy agreement, and expected acceptance `1 - TV`. Splits are math, familiar extraction, and shifted extraction. Position bins are `[1, 16]`, `[17, 32]`, `[33, 64]`, and `65–192`. Teacher and `exact_spec_original_gamma4` prefixes are the same target law. Every draft (original and the four merged students) is scored on every bank: the supplied `teacher` and `original_draft` banks, `exact_spec_original_gamma4`, and each trained student's frozen own-rollout bank (producer checkpoint recorded). One forward of the longest prefix per (bank, prompt) gives all of its positions. `alignment.json` holds, per bank and draft, overall, positions 1-64 vs 65-192, by domain, by bin and by domain x bin; seed dispersion; prompt-clustered bootstrap differences against the original draft and on- vs off-policy; the target-vs-speculative consistency check (per-prompt target entropy, original-draft forward KL and 1 - TV, and source length, teacher bank minus speculative bank, paired prompt bootstrap, overall and per domain and bin); and decoded aligned disagreements chosen by a fixed rule (largest TV between target and original draft among greedy disagreements, two per shared bank and domain).
 
 The wrapper-overhead run times the unmerged PEFT adapter of `off_policy` seed 6304 against its merged copy on 24 fixed prompts (first 8 per domain), both gammas, alternating order, same seeds. Matched continuations are the first two evaluation prompts of each domain.
+
+## Supplied prefix banks (`prefix_banks`)
+
+The course command `setup_data.py --prefix-banks` crashes under the pinned transformers 4.57.1: `generate()` rejects its `generator=` kwarg. `python task3/run.py prefix_banks` rebuilds the same file with `task3/src/prefix_banks.py`: same pinned model revisions, tokenizer check, prompt list and order (the 60 GSM8K test rows are read from the sha256-checked `gsm8k_test_locked.jsonl.gz`, which holds exactly the manifest rows; the prompt texts must equal the evaluation pool), chat template, per-prompt seeds `6304 + 10007 j (+123 for the draft)`, position RNG and bins, and record fields. Only `generate`'s internal sampler is replaced, by an explicit KV-cached loop that applies what `generate` applies with those arguments (float32 logits, the generation_config repetition penalty, temperature 1, top-k 0, top-p 1, stop after either generation_config EOS id, EOS kept, 192-token cap) and draws with `torch.multinomial(probs, 1, generator=gen)` from the seeded CUDA generator. Before generating, each model replays a short real `generate()` call through the loop and must match its processed distributions (`generate_equivalence_check`). The deviation is recorded in `prefix_banks_build.json`.
+
+Qwen2.5's generation_config sets `repetition_penalty=1.1`, which `generate()` keeps, so the supplied `teacher` bank follows the penalized target law. `align` therefore also builds `teacher_no_rep_penalty` (plain temperature-1 target samples, same seeds and caps) and reports `target_law_control_consistency` (that bank vs exact speculative prefixes) next to the required `target_vs_speculative_consistency`.
+
+## Smoke mode
+
+```bash
+for s in prefix_banks smoke baseline distill merge align eval analyze; do python task3/run.py --smoke $s || break; done
+```
+
+`--smoke` (or `PA4_SMOKE=1`) runs every stage on the real models with sizes reduced, not logic: 4 evaluation prompts (2 math, 1 familiar, 1 shifted; the prefix banks use the same prompts with their full-list seeds and the 192-token cap), 24-token speed and diagnostic caps, 2 diagnostic prompts, 1 wrapper prompt per domain, a 64-token math answer cap, and 320 + 64 scored distillation tokens per run (one full and one short update). Gammas, repetitions, the FP32 gate, all four distillation runs, all five drafts and every bank are unchanged. Output goes to `results/task3_smoke/` and `checkpoints/task3_smoke/`, every JSON object carries `SMOKE_RUN`, and a full-run `analyze` refuses smoke files. The smoke `analyze` fails unless every expected output exists and `smoke_coverage` is all true, then deletes `checkpoints/task3_smoke/` (about 4 GB of merged drafts). Expected time on one T4: about 20 minutes including the first model download.

@@ -1,11 +1,17 @@
 """Task 3 stages. Unit tests stay on CPU. Every stage that would download Qwen refuses without CUDA.
 
-Order: unit, smoke, baseline, distill, merge, align, eval, analyze. `align`
-does forward passes and frozen-rollout generation only (no speed numbers), so
-it may run on a second GPU (CUDA_VISIBLE_DEVICES=1) while `eval` times on the
-first. Every expensive piece is cached under results/task3/ as soon as it
-finishes; with PA4_DEADLINE (unix seconds) set, a stage exits with code 75
-before starting a piece that might not fit, and a rerun resumes from the cache.
+Order: unit, prefix_banks, smoke, baseline, distill, merge, align, eval,
+analyze. `prefix_banks` must finish before `align`. `align` does forward
+passes and frozen-rollout generation only (no speed numbers), so it may run on
+a second GPU (CUDA_VISIBLE_DEVICES=1) while `eval` times on the first. Every
+expensive piece is cached under results/task3/ as soon as it finishes; with
+PA4_DEADLINE (unix seconds) set, a stage exits with code 75 before starting a
+piece, and a rerun resumes from the cache. Each stage checks its inputs before
+loading any model.
+
+Smoke mode (`--smoke` or PA4_SMOKE=1) runs the same code on 4 evaluation
+prompts with small token caps and quotas (see SMOKE_SETTINGS), writing only to
+results/task3_smoke/ and checkpoints/task3_smoke/.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ import gc
 import gzip
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -25,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from shared.paths import course_data_root
 from task3.src.analysis import (
     attach_speed,
     bank_vs_measured,
@@ -39,14 +47,18 @@ from task3.src.distill import (
     METHODS,
     TARGET_MODEL,
     TRAIN_SEEDS,
+    assert_no_eval_leak,
     assert_same_token_ids,
     default_data_paths,
     load_eval_pool,
+    load_training_pool,
     merge_adapter_into_fresh_backbone,
+    render_chat,
     sample_response,
     train_method,
 )
 from task3.src.evaluate import (
+    DIAGNOSTIC_MATH_PROMPTS,
     DIAGNOSTIC_MAX_NEW,
     GAMMAS,
     PAIRED_REPETITIONS,
@@ -60,7 +72,6 @@ from task3.src.evaluate import (
     decode_text,
     diagnostic_math_prompts,
     estimate_speed_model,
-    render_chat,
     repeated_ngram_fraction,
     repetition_order,
     results_dir,
@@ -68,12 +79,55 @@ from task3.src.evaluate import (
     timed_speculative,
     warm_setup,
 )
+from task3.src.runtime import SMOKE_ENV, SMOKE_MARKER, is_smoke, json_default, mark
 
 OUT_OF_BUDGET = 75
-PARTS_VERSION = "task3-parts-v2"
+PARTS_VERSION = "task3-parts-v3"
 WRAPPER_RUN = ("off_policy", 6304)
 WRAPPER_PROMPTS_PER_DOMAIN = 8
 CONTINUATION_PROMPTS_PER_DOMAIN = 2
+DIAGNOSTIC_PROMPTS = DIAGNOSTIC_MATH_PROMPTS
+EXPECTED_EVAL_COUNTS = {"math": 60, "familiar": 30, "shifted": 30}
+EXPECTED_TRAIN_COUNTS = {"math": 500, "short": 300}
+BANK_EQUIVALENCE_TOL = 0.02
+
+# Smoke mode shrinks sizes only. Every stage, model, bank and code path still runs.
+SMOKE_EVAL_PER_DOMAIN = {"math": 2, "familiar": 1, "shifted": 1}
+SMOKE_SETTINGS = {
+    "eval_prompts_per_domain": SMOKE_EVAL_PER_DOMAIN,
+    "prefix_bank_prompts": "the 4 smoke evaluation prompts, with their full-list seeds; 192-token cap kept",
+    "run.SPEED_MAX_NEW": 24,
+    "run.DIAGNOSTIC_MAX_NEW": 24,
+    "run.DIAGNOSTIC_PROMPTS": 2,
+    "run.WRAPPER_PROMPTS_PER_DOMAIN": 1,
+    "evaluate.MATH_ANSWER_MAX_NEW": 64,
+    "distill.MATH_QUOTA": 320,
+    "distill.SHORT_QUOTA": 64,
+    "unchanged": "gammas (2, 4), 2 paired repetitions, 192-token bank caps, 256-token updates, FP32 gate, all 5 drafts",
+}
+
+
+def smoke_overrides() -> list[tuple[object, str, object]]:
+    """(module, attribute, value) for every size a smoke run shrinks."""
+    from task3.src import distill, evaluate
+
+    this = sys.modules[__name__]
+    return [
+        (this, "SPEED_MAX_NEW", SMOKE_SETTINGS["run.SPEED_MAX_NEW"]),
+        (this, "DIAGNOSTIC_MAX_NEW", SMOKE_SETTINGS["run.DIAGNOSTIC_MAX_NEW"]),
+        (this, "DIAGNOSTIC_PROMPTS", SMOKE_SETTINGS["run.DIAGNOSTIC_PROMPTS"]),
+        (this, "WRAPPER_PROMPTS_PER_DOMAIN", SMOKE_SETTINGS["run.WRAPPER_PROMPTS_PER_DOMAIN"]),
+        (evaluate, "MATH_ANSWER_MAX_NEW", SMOKE_SETTINGS["evaluate.MATH_ANSWER_MAX_NEW"]),
+        (distill, "MATH_QUOTA", SMOKE_SETTINGS["distill.MATH_QUOTA"]),
+        (distill, "SHORT_QUOTA", SMOKE_SETTINGS["distill.SHORT_QUOTA"]),
+    ]
+
+
+def configure_smoke() -> None:
+    os.environ[SMOKE_ENV] = "1"
+    for module, name, value in smoke_overrides():
+        setattr(module, name, value)
+    print(f"SMOKE MODE: writing to {results_dir()} and {checkpoint_dir()}; {SMOKE_SETTINGS}", flush=True)
 
 
 def require_cuda(stage: str) -> None:
@@ -91,32 +145,49 @@ def _check_deadline(what: str) -> None:
         raise SystemExit(OUT_OF_BUDGET)
 
 
-def _part(subdir: str, name: str, compute, *, gz: bool = False):
-    """Cache one deterministic piece of a stage so a timed-out run resumes.
-
-    Parts written by an older code version (no or another PARTS_VERSION) are recomputed.
-    """
-    path = results_dir() / subdir / (f"{name}.json.gz" if gz else f"{name}.json")
-    if path.is_file():
-        if gz:
+def _read_part(path: Path):
+    """The cached value, or None when the file is missing, unreadable, stale or from the other mode."""
+    if not path.is_file():
+        return None
+    try:
+        if path.suffix == ".gz":
             with gzip.open(path, "rt", encoding="utf-8") as handle:
                 stored = json.load(handle)
         else:
             stored = json.loads(path.read_text(encoding="utf-8"))
-        if stored.get("version") == PARTS_VERSION:
-            print(f"{subdir}: reusing {name}", flush=True)
-            return stored["value"]
-        print(f"{subdir}: {name} is from another code version; recomputing", flush=True)
+    except (OSError, EOFError, ValueError) as error:
+        print(f"{path.name} is unreadable ({error!r}); recomputing", flush=True)
+        return None
+    if not isinstance(stored, dict) or stored.get("version") != PARTS_VERSION or "value" not in stored:
+        print(f"{path.name} is from another code version; recomputing", flush=True)
+        return None
+    if bool(stored.get(SMOKE_MARKER)) != is_smoke():
+        print(f"{path.name} belongs to the other (smoke/full) mode; recomputing", flush=True)
+        return None
+    return stored
+
+
+def _part(subdir: str, name: str, compute, *, gz: bool = False):
+    """Cache one deterministic piece of a stage so a timed-out run resumes.
+
+    Writes are atomic, so a killed process leaves either the old file or none.
+    Parts that are unreadable or written by an older code version are recomputed.
+    """
+    path = results_dir() / subdir / (f"{name}.json.gz" if gz else f"{name}.json")
+    stored = _read_part(path)
+    if stored is not None:
+        print(f"{subdir}: reusing {name}", flush=True)
+        return stored["value"]
     _check_deadline(f"{subdir} part {name}")
     started = time.time()
     value = compute()
-    payload = {"value": value, "version": PARTS_VERSION}
+    payload = mark({"value": value, "version": PARTS_VERSION})
     if gz:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
+        tmp = path.with_name(f".{path.name}.tmp")
         with gzip.open(tmp, "wt", encoding="utf-8") as handle:
-            json.dump(payload, handle)
-        tmp.replace(path)
+            json.dump(payload, handle, default=json_default)
+        os.replace(tmp, path)
     else:
         _dump(path, payload)
     print(f"{subdir}: {name} done in {time.time() - started:.0f}s", flush=True)
@@ -124,9 +195,7 @@ def _part(subdir: str, name: str, compute, *, gz: bool = False):
 
 
 def _part_is_current(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    return json.loads(path.read_text(encoding="utf-8")).get("version") == PARTS_VERSION
+    return _read_part(path) is not None
 
 
 def _eval_part(name: str, compute):
@@ -146,73 +215,59 @@ def _eos(tokenizer) -> int | None:
     return None if tokenizer.eos_token_id is None else int(tokenizer.eos_token_id)
 
 
-def stage_unit() -> None:
-    import unittest
-
-    suite = unittest.defaultTestLoader.discover("task3/tests")
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    if not result.wasSuccessful():
-        raise SystemExit(1)
+# ---------------------------------------------------------------- inputs
 
 
-def stage_smoke() -> None:
-    require_cuda("smoke")
-    from task3.src.evaluate import run_smoke
-
-    run_smoke()
-
-
-def _export_existing(source: Path, target: Path) -> None:
-    """Copy evidence written next to a checkpoint into results/ when only the checkpoint copy exists."""
-    import shutil
-
-    if source.is_file() and not target.is_file():
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
+def _domain_counts(examples) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for example in examples:
+        counts[example.domain] = counts.get(example.domain, 0) + 1
+    return counts
 
 
-def stage_distill() -> None:
-    require_cuda("distill")
-    from task3.src.distill import distill_results_dir
-
-    for method in METHODS:
-        for seed in TRAIN_SEEDS:
-            output = checkpoint_dir() / method / f"seed{seed}"
-            if (output / "adapter").is_dir():
-                _export_existing(output / "train_log.json", distill_results_dir(method, seed) / "train_log.json")
-                print(f"distill {method} seed {seed}: adapter exists, skipping", flush=True)
-                continue
-            _check_deadline(f"distill {method} seed {seed}")
-            print(f"distilling {method} seed {seed}", flush=True)
-            train_method(method, seed, output)
+def _validate_eval_pool(examples) -> None:
+    counts = _domain_counts(examples)
+    if counts != EXPECTED_EVAL_COUNTS:
+        raise SystemExit(f"evaluation pool has {counts}, expected {EXPECTED_EVAL_COUNTS}")
+    ids = [example.source_id for example in examples]
+    if len(set(ids)) != len(ids) or any(not example.text.strip() for example in examples):
+        raise SystemExit("evaluation pool has duplicate ids or empty prompts")
 
 
-def merge_report_path(method: str, seed: int) -> Path:
-    return results_dir() / "merge" / f"{method}_seed{seed}" / "merge_error.json"
+def _smoke_subset(examples) -> list:
+    chosen = []
+    for domain, count in SMOKE_EVAL_PER_DOMAIN.items():
+        chosen.extend([example for example in examples if example.domain == domain][:count])
+    order = {example.source_id: index for index, example in enumerate(examples)}
+    return sorted(chosen, key=lambda example: order[example.source_id])
 
 
-def stage_merge() -> None:
-    require_cuda("merge")
-    for method in METHODS:
-        for seed in TRAIN_SEEDS:
-            adapter = checkpoint_dir() / method / f"seed{seed}" / "adapter"
-            merged = checkpoint_dir() / method / f"seed{seed}" / "merged"
-            if not adapter.is_dir():
-                raise SystemExit(f"missing adapter {adapter}. Run the distill stage first.")
-            report = merge_report_path(method, seed)
-            if merged.is_dir() and any(merged.glob("*.safetensors")):
-                _export_existing(merged / "merge_error.json", report)
-                print(f"merge {method} seed {seed}: merged draft exists, skipping", flush=True)
-                continue
-            _check_deadline(f"merge {method} seed {seed}")
-            print(f"merging {method} seed {seed}", flush=True)
-            merge_adapter_into_fresh_backbone(adapter, merged, report_path=report)
+def _inputs(load):
+    """Call a data loader; a missing or malformed input file stops the stage before any model load."""
+    try:
+        return load()
+    except (FileNotFoundError, ValueError, KeyError) as error:
+        raise SystemExit(f"input check failed: {error!r}") from error
 
 
-def _load_target():
-    from task3.src.distill import load_frozen_causal
+def _eval_examples() -> list:
+    """The validated 120-prompt evaluation pool (the 4-prompt subset in smoke mode)."""
+    examples = _inputs(load_eval_pool)
+    _validate_eval_pool(examples)
+    return _smoke_subset(examples) if is_smoke() else examples
 
-    return load_frozen_causal(TARGET_MODEL)
+
+def _adapter_complete(run_dir: Path) -> bool:
+    adapter = run_dir / "adapter"
+    return (run_dir / "train_log.json").is_file() and (adapter / "adapter_config.json").is_file() and any(adapter.glob("adapter_model.*"))
+
+
+def _merged_complete(merged: Path) -> bool:
+    return (merged / "merge_error.json").is_file() and (merged / "config.json").is_file() and any(merged.glob("*.safetensors"))
+
+
+def _run_dir(method: str, seed: int) -> Path:
+    return checkpoint_dir() / method / f"seed{seed}"
 
 
 def _draft_names() -> list[str]:
@@ -224,13 +279,245 @@ def _merged_dir(name: str) -> Path:
     return checkpoint_dir() / method / f"seed{seed}" / "merged"
 
 
+def _require_merged_drafts() -> None:
+    missing = [str(_merged_dir(name)) for name in _draft_names()[1:] if not _merged_complete(_merged_dir(name))]
+    if missing:
+        raise SystemExit(f"missing or incomplete merged drafts {missing}. Run the merge stage first.")
+
+
+def prefix_bank_path() -> Path:
+    """The supplied bank lives in the data repo; a smoke bank stays inside the smoke results."""
+    from task3.src.prefix_banks import BANK_FILE
+
+    if is_smoke():
+        return results_dir() / "prefix_banks" / BANK_FILE
+    return default_data_paths()["prefix_banks"]
+
+
+def _validate_bank(path: Path, examples) -> list[dict]:
+    """Both supplied banks must cover exactly the evaluation prompts, with identical prompt text."""
+    from task3.src import alignment as al
+
+    rows = _inputs(lambda: al.load_prefix_bank(path))
+    text = {example.source_id: example.text for example in examples}
+    for bank in al.SUPPLIED_BANKS:
+        ids = {row["prompt_id"] for row in rows if row["bank"] == bank}
+        if ids != set(text):
+            raise SystemExit(
+                f"{path}: bank {bank} covers {len(ids)} prompts, expected {len(text)} "
+                f"(missing {sorted(set(text) - ids)[:5]}, extra {sorted(ids - set(text))[:5]})"
+            )
+    mismatch = sorted({row["prompt_id"] for row in rows if row["prompt"] != text[row["prompt_id"]]})
+    if mismatch:
+        raise SystemExit(f"{path}: prompt text differs from the evaluation pool for {mismatch[:5]}")
+    return rows
+
+
+# ---------------------------------------------------------------- stages
+
+
+def stage_unit() -> None:
+    import unittest
+
+    suite = unittest.defaultTestLoader.discover("task3/tests")
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    if not result.wasSuccessful():
+        raise SystemExit(1)
+
+
+def _bank_plan():
+    """Revisions, the course prompt list (checked against the evaluation pool) and the prompts to build."""
+    from task3.src import prefix_banks as pb
+
+    root = course_data_root()
+    revisions = _inputs(lambda: pb.load_revisions(root))
+    prompts = _inputs(lambda: pb.bank_prompts(root))
+    examples = _inputs(load_eval_pool)
+    _validate_eval_pool(examples)
+    if [(pid, text) for pid, text, _domain in prompts] != [(example.source_id, example.text) for example in examples]:
+        raise SystemExit("course prefix-bank prompts differ from the evaluation pool (ids, order or text)")
+    indexed = [(index, pid, text, domain) for index, (pid, text, domain) in enumerate(prompts)]
+    if is_smoke():
+        keep = {example.source_id for example in _smoke_subset(examples)}
+        indexed = [item for item in indexed if item[1] in keep]
+    return revisions, prompts, indexed
+
+
+def _load_bank_tokenizers(revisions: dict):
+    from transformers import AutoTokenizer
+
+    from task3.src.prefix_banks import REPOS
+    from task3.src.runtime import with_retries
+
+    return tuple(
+        with_retries(lambda key=key: AutoTokenizer.from_pretrained(REPOS[key], revision=revisions[key]), f"tokenizer {REPOS[key]}")
+        for key in ("model_target", "model_draft")
+    )
+
+
+def _load_bank_model(key: str, revisions: dict):
+    """Exactly the course load: pinned revision, FP16, SDPA, CUDA, eval mode."""
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    from task3.src.prefix_banks import REPOS
+    from task3.src.runtime import with_retries
+
+    model = with_retries(
+        lambda: AutoModelForCausalLM.from_pretrained(
+            REPOS[key], revision=revisions[key], torch_dtype=torch.float16, attn_implementation="sdpa"
+        ),
+        f"model {REPOS[key]}",
+    )
+    return model.to("cuda").eval()
+
+
+def _build_one_bank(bank: str, key: str, revisions: dict, tokenizer, indexed) -> dict:
+    from task3.src import prefix_banks as pb
+
+    print(f"prefix_banks: loading {pb.REPOS[key]} for the {bank} bank", flush=True)
+    model = _load_bank_model(key, revisions)
+    settings = pb.sampling_settings(model, _eos(tokenizer))
+    check = pb.generate_equivalence(model, pb.chat_ids(tokenizer, indexed[0][2]), settings)
+    print(f"prefix_banks: {bank} settings {settings}; generate() equivalence {check['max_abs_prob_gap']}", flush=True)
+    if check["max_abs_prob_gap"] is None or check["max_abs_prob_gap"] > BANK_EQUIVALENCE_TOL:
+        raise RuntimeError(f"explicit sampler differs from generate() for {bank}: {check}")
+    started = time.time()
+    records = pb.generate_bank(model, tokenizer, indexed, bank, settings, progress=lambda text: print(text, flush=True))
+    seconds = time.time() - started
+    del model
+    _free()
+    return {"records": records, "settings": settings, "generate_equivalence": check, "generation_seconds": seconds}
+
+
+def stage_prefix_banks() -> None:
+    """Rebuild the supplied teacher / original-draft banks (course prefix_banks(), explicit sampler)."""
+    import torch
+    import transformers
+
+    from task3.src import prefix_banks as pb
+
+    revisions, prompts, indexed = _bank_plan()
+    dest = prefix_bank_path()
+    if dest.is_file():
+        rows = _validate_bank(dest, [example for example in _eval_examples()])
+        print(f"prefix_banks: {dest} exists with {len(rows)} valid records; skipping", flush=True)
+        return
+    require_cuda("prefix_banks")
+    started = time.time()
+    target_tokenizer, draft_tokenizer = _load_bank_tokenizers(revisions)
+    pb.check_tokenizers(target_tokenizer, draft_tokenizer)
+    template_mismatch = [pid for _index, pid, text, _domain in indexed if pb.chat_ids(target_tokenizer, text) != render_chat(target_tokenizer, text)]
+    if template_mismatch:
+        raise SystemExit(f"course chat template differs from the evaluation template for {template_mismatch[:5]}")
+    built = {
+        bank: _part("prefix_bank_parts", bank, lambda bank=bank, key=key: _build_one_bank(bank, key, revisions, target_tokenizer, indexed), gz=True)
+        for bank, key, _offset in pb.BANKS
+    }
+    records = [record for bank, _key, _offset in pb.BANKS for record in built[bank]["records"]]
+    pb.write_bank(dest, records)
+    meta = {
+        "bank_file": str(dest),
+        "n_records": len(records),
+        "n_prompts_built": len(indexed),
+        "n_prompts_course_list": len(prompts),
+        "prompts_sha256": pb.prompts_digest(prompts),
+        "prompt_source": "data/public_locked/gsm8k_test_locked.jsonl.gz (sha256-checked GSM8K test rows of the course manifest) + data/short_form/short_test.jsonl",
+        "course_function": pb.COURSE_SCRIPT,
+        "deviation": pb.DEVIATION,
+        "sampling": {bank: built[bank]["settings"] for bank in built},
+        "generate_equivalence_check": {bank: built[bank]["generate_equivalence"] for bank in built},
+        "generation_seconds": {bank: built[bank]["generation_seconds"] for bank in built},
+        "summary": pb.bank_summary(records),
+        "revisions": revisions,
+        "versions": {"torch": torch.__version__, "transformers": transformers.__version__},
+        "note": "Qwen2.5 generation_config keeps repetition_penalty=1.1 under generate(); the teacher bank therefore "
+        "follows the penalized target law. align adds an unpenalized target bank as a consistency control.",
+        "stage_seconds": time.time() - started,
+    }
+    _dump(dest.with_name(pb.META_FILE), meta)
+    _dump(results_dir() / pb.META_FILE, meta)
+    print(f"wrote {dest} ({len(records)} records)", flush=True)
+
+
+def stage_smoke() -> None:
+    require_cuda("smoke")
+    from task3.src.evaluate import run_smoke
+
+    run_smoke()
+
+
+def _export_existing(source: Path, target: Path) -> None:
+    """Copy evidence written next to a checkpoint into results/ when only the checkpoint copy exists."""
+    if source.is_file() and not target.is_file():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
+
+def stage_distill() -> None:
+    from task3.src.distill import distill_results_dir
+
+    math_examples, short_examples = _inputs(load_training_pool)
+    counts = {"math": len(math_examples), "short": len(short_examples)}
+    if counts != EXPECTED_TRAIN_COUNTS:
+        raise SystemExit(f"training pool has {counts}, expected {EXPECTED_TRAIN_COUNTS}")
+    assert_no_eval_leak([*math_examples, *short_examples], _inputs(load_eval_pool))
+    require_cuda("distill")
+    for method in METHODS:
+        for seed in TRAIN_SEEDS:
+            output = _run_dir(method, seed)
+            if _adapter_complete(output):
+                _export_existing(output / "train_log.json", distill_results_dir(method, seed) / "train_log.json")
+                print(f"distill {method} seed {seed}: adapter exists, skipping", flush=True)
+                continue
+            if (output / "adapter").exists():
+                print(f"distill {method} seed {seed}: removing an incomplete adapter", flush=True)
+                shutil.rmtree(output / "adapter")
+            _check_deadline(f"distill {method} seed {seed}")
+            print(f"distilling {method} seed {seed}", flush=True)
+            train_method(method, seed, output)
+
+
+def merge_report_path(method: str, seed: int) -> Path:
+    return results_dir() / "merge" / f"{method}_seed{seed}" / "merge_error.json"
+
+
+def stage_merge() -> None:
+    missing = [str(_run_dir(m, s)) for m in METHODS for s in TRAIN_SEEDS if not _adapter_complete(_run_dir(m, s))]
+    if missing:
+        raise SystemExit(f"missing or incomplete adapters {missing}. Run the distill stage first.")
+    require_cuda("merge")
+    for method in METHODS:
+        for seed in TRAIN_SEEDS:
+            adapter = _run_dir(method, seed) / "adapter"
+            merged = _run_dir(method, seed) / "merged"
+            report = merge_report_path(method, seed)
+            if _merged_complete(merged):
+                _export_existing(merged / "merge_error.json", report)
+                print(f"merge {method} seed {seed}: merged draft exists, skipping", flush=True)
+                continue
+            if merged.exists():
+                print(f"merge {method} seed {seed}: removing an incomplete merged draft", flush=True)
+                shutil.rmtree(merged)
+            _check_deadline(f"merge {method} seed {seed}")
+            print(f"merging {method} seed {seed}", flush=True)
+            merge_adapter_into_fresh_backbone(adapter, merged, report_path=report)
+            _free()
+
+
+def _load_target():
+    from task3.src.distill import load_frozen_causal
+
+    return load_frozen_causal(TARGET_MODEL)
+
+
 def _load_draft(name: str, tokenizer):
     """The original 0.5B draft, or a merged FP16 checkpoint. Token ids must match the target."""
     from task3.src.distill import load_frozen_causal
 
+    if name != "original" and not _merged_complete(_merged_dir(name)):
+        raise SystemExit(f"missing or incomplete merged draft {_merged_dir(name)}. Run the merge stage first.")
     source = DRAFT_MODEL if name == "original" else str(_merged_dir(name))
-    if name != "original" and not _merged_dir(name).is_dir():
-        raise SystemExit(f"missing merged draft {_merged_dir(name)}. Run the merge stage first.")
     model, draft_tokenizer = load_frozen_causal(source)
     assert_same_token_ids(tokenizer, draft_tokenizer)
     return model
@@ -273,11 +560,19 @@ def _benchmark(target, draft, tokenizer, examples, *, label: str, max_new: int, 
     return report
 
 
+def _diagnostic_prompts(examples) -> list:
+    try:
+        return diagnostic_math_prompts(examples, DIAGNOSTIC_PROMPTS)
+    except RuntimeError as error:
+        raise SystemExit(str(error)) from error
+
+
 def stage_baseline() -> None:
+    examples = _eval_examples()
+    _diagnostic_prompts(examples)
     require_cuda("baseline")
     target, tokenizer = _load_target()
     draft = _load_draft("original", tokenizer)
-    examples = load_eval_pool()
     report = _part(
         "baseline_parts",
         "primary",
@@ -287,14 +582,14 @@ def stage_baseline() -> None:
         "baseline_parts",
         "math_diagnostic_64_ignore_eos",
         lambda: _benchmark(
-            target, draft, tokenizer, diagnostic_math_prompts(examples), label="math_diagnostic_64",
+            target, draft, tokenizer, _diagnostic_prompts(examples), label="math_diagnostic_64",
             max_new=DIAGNOSTIC_MAX_NEW, ignore_eos=True, seed=6304,
         ),
     )
     payload = {
         "primary": report,
         "diagnostic_ignore_eos": diagnostic,
-        "diagnostic_note": "24 math prompts, exactly 64 new tokens with EOS ignored, timing only; not an answer-quality run.",
+        "diagnostic_note": f"{DIAGNOSTIC_PROMPTS} math prompts, exactly {DIAGNOSTIC_MAX_NEW} new tokens with EOS ignored, timing only; not an answer-quality run.",
         "target": TARGET_MODEL,
         "draft": DRAFT_MODEL,
     }
@@ -304,17 +599,13 @@ def stage_baseline() -> None:
 
 def stage_align() -> None:
     """Common-prefix alignment of every draft on the shared and student banks (no timing)."""
-    require_cuda("align")
     from task3.src import alignment as al
 
-    bank_path = default_data_paths()["prefix_banks"]
-    supplied = al.load_prefix_bank(bank_path)
-    examples = load_eval_pool()
-    eval_text = {example.source_id: example.text for example in examples}
-    unknown = sorted({row["prompt_id"] for row in supplied} - set(eval_text))
-    if unknown:
-        raise SystemExit(f"prefix bank has prompt ids outside the evaluation pool: {unknown[:5]}")
-    text_mismatch = sorted({row["prompt_id"] for row in supplied if row["prompt"] != eval_text[row["prompt_id"]]})
+    examples = _eval_examples()
+    bank_path = prefix_bank_path()
+    supplied = _validate_bank(bank_path, examples)
+    _require_merged_drafts()
+    require_cuda("align")
 
     target, tokenizer = _load_target()
     drafts = {name: _load_draft(name, tokenizer) for name in _draft_names()}
@@ -322,6 +613,7 @@ def stage_align() -> None:
     for row in supplied:
         banks.setdefault(row["bank"], []).append(row)
     banks[al.SPEC_BANK] = _part("align_parts", "bank_exact_spec_original_gamma4", lambda: al.exact_spec_bank(target, drafts["original"], tokenizer, examples), gz=True)
+    banks[al.TARGET_LAW_BANK] = _part("align_parts", f"bank_{al.TARGET_LAW_BANK}", lambda: al.target_law_bank(target, tokenizer, examples), gz=True)
     for name in _draft_names()[1:]:
         seed = int(name.rsplit("_seed", 1)[1])
         banks[f"student_{name}"] = _part(
@@ -353,17 +645,20 @@ def stage_align() -> None:
         },
         "n_supplied_prefixes": len(supplied),
         "supplied_bank_path": str(bank_path),
-        "supplied_prompt_text_mismatches": text_mismatch,
-        "drafts": {name: ("Qwen/Qwen2.5-0.5B-Instruct" if name == "original" else str(_merged_dir(name))) for name in drafts},
+        "drafts": {name: (DRAFT_MODEL if name == "original" else str(_merged_dir(name))) for name in drafts},
         "summary": al.summarize_scores(all_rows),
         "target_vs_speculative_consistency": al.consistency_check(all_rows),
+        "target_law_control_consistency": al.consistency_check(all_rows, bank_a=al.TARGET_LAW_BANK),
+        "consistency_note": al.CONSISTENCY_NOTE,
         "aligned_disagreements": al.decode_disagreements(shared_scores, shared_prefixes, tokenizer),
     }
     _dump(results_dir() / "alignment.json", payload)
     path = results_dir() / "alignment_rows.jsonl.gz"
-    with gzip.open(path, "wt", encoding="utf-8") as handle:
+    tmp = path.with_name(f".{path.name}.tmp")
+    with gzip.open(tmp, "wt", encoding="utf-8") as handle:
         for row in al.compact(all_rows):
-            handle.write(json.dumps(row) + "\n")
+            handle.write(json.dumps(row, default=json_default) + "\n")
+    os.replace(tmp, path)
     print(f"wrote {results_dir() / 'alignment.json'} ({len(all_rows)} scored rows)", flush=True)
 
 
@@ -485,9 +780,13 @@ def stage_eval() -> None:
     Drafts are loaded one at a time, so peak memory reflects the target plus
     one draft. Each piece is cached in results/task3/eval_parts/.
     """
+    examples = _eval_examples()
+    _diagnostic_prompts(examples)
+    _require_merged_drafts()
+    if not _adapter_complete(_run_dir(*WRAPPER_RUN)):
+        raise SystemExit(f"missing adapter {_run_dir(*WRAPPER_RUN)} for the wrapper-overhead run. Run distill first.")
     require_cuda("eval")
     target, tokenizer = _load_target()
-    examples = load_eval_pool()
     benchmarks: dict = {}
     accuracy: dict = {}
     diagnostics: dict = {}
@@ -505,7 +804,7 @@ def stage_eval() -> None:
         diagnostics[name] = _eval_part(
             f"diagnostic_{name}",
             lambda draft=draft, name=name: _benchmark(
-                target, draft, tokenizer, diagnostic_math_prompts(examples), label=f"{name}_math_diagnostic_64",
+                target, draft, tokenizer, _diagnostic_prompts(examples), label=f"{name}_math_diagnostic_64",
                 max_new=DIAGNOSTIC_MAX_NEW, ignore_eos=True, seed=6304,
             ),
         )
@@ -527,14 +826,54 @@ def stage_eval() -> None:
 
 
 def _read(path: Path):
-    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+    """A stage output, or None. Smoke outputs never enter a full-run analysis."""
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict) and payload.get(SMOKE_MARKER) and not is_smoke():
+        raise SystemExit(f"{path} is a smoke-run output and cannot enter the full analysis")
+    return payload
+
+
+def _smoke_coverage(report: dict, outputs: dict) -> dict[str, bool]:
+    """Every code path a full run needs, as booleans; a smoke run fails unless all are true."""
+    from task3.src import alignment as al
+
+    banks = outputs.get("prefix_banks") or {}
+    baseline = outputs.get("baseline") or {}
+    alignment = outputs.get("align") or {}
+    evaluation = outputs.get("eval") or {}
+    logs = outputs.get("logs", {})
+    return {
+        "prefix_banks_both_banks": set((banks.get("summary") or {})) == set(al.SUPPLIED_BANKS)
+        and all(value["n_records"] > 0 for value in banks["summary"].values()),
+        "prefix_banks_generate_equivalence": all(
+            (value or {}).get("max_abs_prob_gap") is not None for value in (banks.get("generate_equivalence_check") or {"x": None}).values()
+        ),
+        "fp32_gate_passed": bool((outputs.get("smoke") or {}).get("passed")),
+        "baseline_both_gammas": set((baseline.get("primary") or {}).get("speed", {})) == {str(g) for g in GAMMAS},
+        "baseline_ignore_eos_diagnostic": bool((baseline.get("diagnostic_ignore_eos") or {}).get("ignore_eos")),
+        "distill_four_runs": len(logs) == len(METHODS) * len(TRAIN_SEEDS),
+        "distill_full_and_short_updates": bool(logs) and all(log.get("optimizer_steps", 0) >= 2 and log.get("short_final_update") for log in logs.values()),
+        "distill_on_policy_rollouts": bool(logs) and all(log.get("student_rollout_s", 0) > 0 for name, log in logs.items() if name.startswith("on_policy")),
+        "distill_off_policy_teacher_pool": bool(logs) and all(log.get("offline_teacher_response_preparation_s", 0) > 0 for name, log in logs.items() if name.startswith("off_policy")),
+        "merge_reports": len(outputs.get("merges", {})) == len(METHODS) * len(TRAIN_SEEDS),
+        "align_all_banks": {*al.SUPPLIED_BANKS, al.SPEC_BANK, al.TARGET_LAW_BANK, *(f"student_{n}" for n in _draft_names()[1:])} <= set(alignment.get("summary", {})),
+        "align_consistency": (alignment.get("target_vs_speculative_consistency") or {}).get("n_comparisons", 0) > 0,
+        "eval_all_drafts": set(evaluation.get("benchmarks", {})) == set(_draft_names()) and set(evaluation.get("standalone_accuracy", {})) == set(_draft_names()),
+        "eval_wrapper_overhead": bool((evaluation.get("wrapper_overhead") or {}).get("rows")),
+        "eval_continuations": bool((evaluation.get("continuations") or {}).get("examples")),
+        "analyze_bootstrap": all("bootstrap" in (speed or {}).get(str(GAMMAS[0]), {}) for speed in report.get("eval_speed", {"x": None}).values()),
+    }
 
 
 def stage_analyze() -> None:
     """Summarize saved GPU artifacts on CPU. Missing files are reported; nothing is trained here."""
     from task3.src.distill import distill_results_dir
+    from task3.src.prefix_banks import META_FILE
 
     expected = {
+        "prefix_banks": results_dir() / META_FILE,
         "smoke": results_dir() / "smoke.json",
         "baseline": results_dir() / "baseline.json",
         "align": results_dir() / "alignment.json",
@@ -552,6 +891,9 @@ def stage_analyze() -> None:
                 merges[name] = _read(expected[f"merge_{name}"])
     missing = [name for name, path in expected.items() if not path.is_file()]
     report: dict = {"missing": missing, "gpu_stages_remaining": _remaining_stages(missing)}
+    banks = _read(expected["prefix_banks"])
+    if banks:
+        report["prefix_banks"] = {key: banks.get(key) for key in ("n_records", "summary", "sampling", "generate_equivalence_check", "deviation", "note")}
     smoke = _read(expected["smoke"])
     if smoke:
         report["smoke"] = {key: smoke.get(key) for key in ("passed", "fp32_gate", "fp32_gate_failures", "fp32", "fp16_diagnostic")}
@@ -571,9 +913,9 @@ def stage_analyze() -> None:
         report["alignment_overall"] = {
             bank: {name: entry["overall"] for name, entry in table["drafts"].items()} for bank, table in alignment["summary"].items()
         }
-        report["target_vs_speculative_consistency"] = {
-            key: alignment["target_vs_speculative_consistency"][key] for key in ("n_comparisons", "n_ci_excluding_zero", "overall")
-        }
+        for key in ("target_vs_speculative_consistency", "target_law_control_consistency"):
+            if alignment.get(key):
+                report[key] = {field: alignment[key].get(field) for field in ("bank_a", "bank_b", "n_comparisons", "n_ci_excluding_zero", "overall")}
     evaluation = _read(expected["eval"])
     if evaluation:
         benchmarks = evaluation["benchmarks"]
@@ -588,13 +930,34 @@ def stage_analyze() -> None:
             report["bank_vs_measured_acceptance"] = bank_vs_measured(alignment["summary"], benchmarks)
         if logs:
             report["deployment_break_even"] = deployment_break_even(logs, merges, benchmarks)
+    failed: list[str] = []
+    if is_smoke():
+        outputs = {"prefix_banks": banks, "smoke": smoke, "baseline": baseline, "align": alignment, "eval": evaluation, "logs": logs, "merges": merges}
+        report["smoke_settings"] = SMOKE_SETTINGS
+        report["smoke_coverage"] = _smoke_coverage(report, outputs)
+        failed = [name for name, ok in report["smoke_coverage"].items() if not ok]
     _dump(results_dir() / "analyze.json", report)
     print(json.dumps({"missing": missing, "gpu_stages_remaining": report["gpu_stages_remaining"]}, indent=2))
+    if is_smoke():
+        if missing or failed:
+            raise SystemExit(f"SMOKE FAILED: missing outputs {missing}, uncovered paths {failed}")
+        if checkpoint_dir().is_dir():
+            shutil.rmtree(checkpoint_dir())
+            print(f"removed smoke checkpoints {checkpoint_dir()}", flush=True)
+        print("SMOKE PASSED: every stage and code path ran on the real models", flush=True)
 
 
 def _remaining_stages(missing: list[str]) -> list[str]:
     stages = []
-    for stage, prefix in (("smoke", "smoke"), ("baseline", "baseline"), ("distill", "distill_"), ("merge", "merge_"), ("align", "align"), ("eval", "eval")):
+    for stage, prefix in (
+        ("prefix_banks", "prefix_banks"),
+        ("smoke", "smoke"),
+        ("baseline", "baseline"),
+        ("distill", "distill_"),
+        ("merge", "merge_"),
+        ("align", "align"),
+        ("eval", "eval"),
+    ):
         if any(name == prefix or name.startswith(prefix) for name in missing):
             stages.append(stage)
     if stages:
@@ -604,6 +967,7 @@ def _remaining_stages(missing: list[str]) -> list[str]:
 
 STAGES = {
     "unit": stage_unit,
+    "prefix_banks": stage_prefix_banks,
     "smoke": stage_smoke,
     "baseline": stage_baseline,
     "distill": stage_distill,
@@ -617,7 +981,10 @@ STAGES = {
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="ATML PA4 task 3 stages")
     parser.add_argument("stage", choices=list(STAGES))
+    parser.add_argument("--smoke", action="store_true", help="reduced sizes, separate results/checkpoints (also PA4_SMOKE=1)")
     args = parser.parse_args(argv)
+    if args.smoke or is_smoke():
+        configure_smoke()
     STAGES[args.stage]()
 
 

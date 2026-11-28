@@ -7,7 +7,12 @@ Banks (all scored by every draft, on the same prefix ids and positions):
   position, prompt, response_prefix_token_ids = seq[:position - 1],
   source_length, source_generation_seed).
 - `exact_spec_original_gamma4`: generated here with the exact sampler and the
-  original draft at gamma = 4; the same target-prefix law as `teacher`.
+  original draft at gamma = 4; the pure target law (temperature 1, top-p 1).
+- `teacher_no_rep_penalty`: plain target sampling (temperature 1, top-p 1, no
+  repetition penalty), same caps and seeds as `teacher`. The supplied banks
+  come from `generate()`, which keeps Qwen2.5's generation_config
+  repetition_penalty = 1.1, so this bank is the matched-law control for the
+  speculative bank in the consistency check.
 - `student_{method}_seed{seed}`: each trained student's own frozen rollouts,
   with the producing checkpoint recorded; every draft is scored on each.
 
@@ -34,6 +39,13 @@ from task3.src.metrics import DOMAINS, POSITION_BINS, aggregate_token_metrics, p
 
 SUPPLIED_BANKS = ("teacher", "original_draft")
 SPEC_BANK = "exact_spec_original_gamma4"
+TARGET_LAW_BANK = "teacher_no_rep_penalty"
+CONSISTENCY_NOTE = (
+    "target_vs_speculative_consistency compares the supplied teacher bank (course generate() call, which keeps "
+    "Qwen2.5's generation_config repetition_penalty=1.1) with exact speculative prefixes (pure temperature-1 target "
+    "law), so a gap there can come from the penalty. target_law_control_consistency compares an unpenalized "
+    "temperature-1 target bank with the same speculative bank: that is the matched-law check of the sampler."
+)
 METRIC_KEYS = ("forward_kl", "reverse_kl", "tv", "greedy_agreement", "expected_acceptance")
 TOP_K = 5
 REQUIRED_FIELDS = ("prompt_id", "domain", "bank", "position", "prompt", "response_prefix_token_ids")
@@ -57,8 +69,8 @@ def load_prefix_bank(path: Path) -> list[dict]:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(
-            f"missing prefix bank {path}. Build it with the course repo's setup_data.py --prefix-banks "
-            "on CUDA and place it at default_data_paths()['prefix_banks']."
+            f"missing prefix bank {path}. Build it with `python task3/run.py prefix_banks` on CUDA "
+            "(the course setup_data.py --prefix-banks call fails under transformers 4.57.1)."
         )
     rows = []
     for record in load_jsonl(path):
@@ -326,8 +338,9 @@ def consistency_check(rows: Sequence[dict], *, bank_a: str = "teacher", bank_b: 
             boot["mean_b"] = float(np.mean([right_means[p] for p in prompts]))
             boot["consistent"] = bool(boot["ci_low"] <= 0.0 <= boot["ci_high"])
             boot["n_prompts"] = len(prompts)
-            boot["n_tokens_a"] = sum(1 for row in left if row["prompt_id"] in set(prompts))
-            boot["n_tokens_b"] = sum(1 for row in right if row["prompt_id"] in set(prompts))
+            chosen = set(prompts)
+            boot["n_tokens_a"] = sum(1 for row in left if row["prompt_id"] in chosen)
+            boot["n_tokens_b"] = sum(1 for row in right if row["prompt_id"] in chosen)
             out[stat] = boot
         return out
 
@@ -508,4 +521,25 @@ def student_bank(model, name: str, checkpoint: str, tokenizer, examples, *, seed
             producer=checkpoint, generation_seed=rollout_seed,
         ):
             rows.append(row)
+    return rows
+
+
+def target_law_bank(target, tokenizer, examples, *, max_new: int = 192) -> list[dict]:
+    """Matched-law control: plain temperature-1 target samples, EOS-aware, 192-token cap, teacher-bank seeds."""
+    from task3.src.distill import sample_response
+
+    eos_id = None if tokenizer.eos_token_id is None else int(tokenizer.eos_token_id)
+    rows = []
+    for index, example in enumerate(examples):
+        seed = 6304 + 10007 * index
+        tokens, _reason = sample_response(
+            target, render_chat(tokenizer, example.text), max_new_tokens=max_new, eos_id=eos_id,
+            rng=np.random.default_rng(seed),
+        )
+        rows.extend(
+            prefix_rows_from_generation(
+                example.source_id, example.text, example.domain, tokens, TARGET_LAW_BANK,
+                producer="target_t1_no_repetition_penalty", generation_seed=seed,
+            )
+        )
     return rows
