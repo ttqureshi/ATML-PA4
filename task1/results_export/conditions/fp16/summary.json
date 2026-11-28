@@ -1,0 +1,124 @@
+{
+  "achieved_nonzero_fraction": 1.0,
+  "calibration_seconds": 0.0,
+  "census": {
+    "n_eligible": 1310195712,
+    "n_eligible_matrices": 196,
+    "n_excluded": 233518592,
+    "n_unique": 1543714304,
+    "tied": [
+      {
+        "name": "lm_head.weight",
+        "numel": 233373696,
+        "shares_with": "model.embed_tokens.weight"
+      }
+    ]
+  },
+  "condition": "fp16",
+  "dense_fp16_bytes": 3087428608,
+  "family": "baseline",
+  "latency": {
+    "decode_64": {
+      "execution": "dense_fp16",
+      "median_seconds": 2.1170950489999996,
+      "new_tokens": 64,
+      "peak_allocated_bytes": 3102739456,
+      "prompt_tokens_included": 16,
+      "seconds": [
+        2.0978810069999554,
+        2.1132810110000264,
+        2.143243835000021,
+        2.1170950489999996,
+        2.150675417000002
+      ],
+      "status": "ok"
+    },
+    "execution": "dense_fp16",
+    "packed_or_sparse_kernel": false,
+    "prefill": {
+      "2048": {
+        "execution": "dense_fp16",
+        "median_seconds": 0.4805406350000112,
+        "peak_allocated_bytes": 3725635072,
+        "seconds": [
+          0.48082326500002637,
+          0.4775289440000279,
+          0.4805406350000112,
+          0.4810654619999468,
+          0.47954207999998744
+        ],
+        "status": "ok",
+        "tokens": 2048
+      },
+      "512": {
+        "execution": "dense_fp16",
+        "median_seconds": 0.1136142650000238,
+        "peak_allocated_bytes": 3254156800,
+        "seconds": [
+          0.11444397599996137,
+          0.10866768000005322,
+          0.1136142650000238,
+          0.10785903799990137,
+          0.11588048800001616
+        ],
+        "status": "ok",
+        "tokens": 512
+      }
+    },
+    "repeats": 5,
+    "warmup": 2
+  },
+  "method": "fp16",
+  "nominal_bits": 16,
+  "packed_bytes": 3087428608,
+  "projections": [],
+  "quality": {
+    "c4_validation": {
+      "mean_nll": 2.7055309450531007,
+      "n_tokens": 50000,
+      "n_windows": 177,
+      "nll_sum": 135276.54725265503,
+      "perplexity": 14.96225871919923
+    },
+    "hellaswag": {
+      "acc_norm": 0.673,
+      "accuracy": 0.4925,
+      "n_examples": 2000,
+      "subset": "full"
+    },
+    "protocol": "Locked Rowan/hellaswag validation examples. The query is preprocess(activity_label + ': ' + ctx_a + ' ' + ctx_b.capitalize()), and each choice is preprocess(ending), using the lm-evaluation-harness bracket cleanup. The score is the conditional token log-likelihood of the choice given the query. acc_norm divides by the character length of the preprocessed choice, not by token count.",
+    "wikitext": {
+      "mean_nll": 2.779270953102112,
+      "n_tokens": 50000,
+      "n_windows": 437,
+      "nll_sum": 138963.5476551056,
+      "perplexity": 16.107273708472984
+    }
+  },
+  "recipe": {
+    "family": "baseline"
+  },
+  "runtime": {
+    "attn_implementation": "sdpa",
+    "data_repo": "https://github.com/AbDu11aHHH/atml-pa4-datasets.git",
+    "data_repo_commit": "6a0a9ec9da7ef3d313ee3036cfec493886723644",
+    "device": "cuda",
+    "dtype": "float16",
+    "execution": "dense_fp16",
+    "group_size": 128,
+    "hidden_size": 1536,
+    "intermediate_size": 8960,
+    "model_id": "Qwen/Qwen2.5-1.5B",
+    "num_hidden_layers": 28,
+    "packed_kernel": false,
+    "seed": 6304,
+    "smoke": false,
+    "tie_word_embeddings": true,
+    "torch": "2.11.0+cu130",
+    "transformers": "4.57.1",
+    "vocab_size": 151936
+  },
+  "smoke": false,
+  "storage_note": "Execution is dense FP16. unstructured_sparse_bytes is the mask-plus-value estimate with every eligible weight nonzero.",
+  "unstructured_sparse_bytes": 3251203072
+}

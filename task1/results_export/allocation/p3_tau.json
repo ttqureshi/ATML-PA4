@@ -1,0 +1,61 @@
+{
+  "development": {
+    "0.5": {
+      "mean_nll": 7.267203120102854,
+      "n_tokens": 32704,
+      "per_sparsity": {
+        "0.5": {
+          "mean_nll": 3.784619579576466,
+          "n_tokens": 16352,
+          "nll_sum": 61886.099365234375
+        },
+        "0.75": {
+          "mean_nll": 10.749786660629242,
+          "n_tokens": 16352,
+          "nll_sum": 175780.51147460938
+        }
+      }
+    },
+    "1.0": {
+      "mean_nll": 6.88072161665168,
+      "n_tokens": 32704,
+      "per_sparsity": {
+        "0.5": {
+          "mean_nll": 2.93289904958348,
+          "n_tokens": 16352,
+          "nll_sum": 47958.76525878906
+        },
+        "0.75": {
+          "mean_nll": 10.828544183719881,
+          "n_tokens": 16352,
+          "nll_sum": 177068.3544921875
+        }
+      }
+    },
+    "2.0": {
+      "mean_nll": 6.76352596469588,
+      "n_tokens": 32704,
+      "per_sparsity": {
+        "0.5": {
+          "mean_nll": 2.901522022404083,
+          "n_tokens": 16352,
+          "nll_sum": 47445.68811035156
+        },
+        "0.75": {
+          "mean_nll": 10.625529906987678,
+          "n_tokens": 16352,
+          "nll_sum": 173748.6650390625
+        }
+      }
+    }
+  },
+  "score": "pooled development token NLL of the 50% and 75% models",
+  "sensitivity_definition": "relative output MSE of an isolated Wanda prune at the target global sparsity",
+  "taus": [
+    0.5,
+    1.0,
+    2.0
+  ],
+  "tie_break": "smaller tau",
+  "winner": 2.0
+}

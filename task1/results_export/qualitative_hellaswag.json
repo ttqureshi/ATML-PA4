@@ -1,0 +1,3002 @@
+[
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -38.02867889404297,
+          -18.610647201538086,
+          -24.43423080444336,
+          -22.27891731262207
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p1_s25": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -43.79689025878906,
+          -22.261798858642578,
+          -28.188583374023438,
+          -25.344768524169922
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p1_s50": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -49.18021774291992,
+          -39.71142578125,
+          -45.82476806640625,
+          -43.12578582763672
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p1_s75": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -124.93939208984375,
+          -102.88565063476562,
+          -132.4235076904297,
+          -127.92416381835938
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p2_2to4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -40.300472259521484,
+          -31.568700790405273,
+          -35.188621520996094,
+          -39.839012145996094
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p2_s25": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -40.81896209716797,
+          -18.796733856201172,
+          -26.14248275756836,
+          -23.90350914001465
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p2_s50": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -36.68991470336914,
+          -21.435009002685547,
+          -26.209123611450195,
+          -26.944122314453125
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "p2_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -95.4053955078125,
+          -82.4163818359375,
+          -87.58097839355469,
+          -118.10012817382812
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "p3_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -34.43372344970703,
+          -25.252819061279297,
+          -27.88549041748047,
+          -36.64399337768555
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "p3_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -100.24557495117188,
+          -80.98153686523438,
+          -84.7533187866211,
+          -117.95016479492188
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "q1_b3": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -44.24632263183594,
+          -33.94184875488281,
+          -42.39292526245117,
+          -31.237747192382812
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q1_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -37.22874450683594,
+          -18.345436096191406,
+          -22.729656219482422,
+          -25.647504806518555
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q1_b8": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -38.08615493774414,
+          -18.62017250061035,
+          -24.396427154541016,
+          -22.470529556274414
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q2_b3": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -40.28068542480469,
+          -27.073593139648438,
+          -32.17518615722656,
+          -32.732635498046875
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q2_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -35.295562744140625,
+          -16.774612426757812,
+          -19.81297492980957,
+          -22.211414337158203
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q2_b8": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -38.11288070678711,
+          -18.608430862426758,
+          -24.436965942382812,
+          -22.220809936523438
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q3_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -65.04637145996094,
+          -90.16036987304688,
+          -112.1290512084961,
+          -120.037841796875
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 0,
+        "prediction_norm": 0
+      },
+      "q3_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -96.167236328125,
+          -94.90701293945312,
+          -122.17913818359375,
+          -114.47189331054688
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q3m_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -41.98429870605469,
+          -32.9549674987793,
+          -43.26902770996094,
+          -51.244041442871094
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "q3m_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -36.71613311767578,
+          -16.385772705078125,
+          -23.599214553833008,
+          -22.031391143798828
+        ],
+        "n_chars": [
+          29,
+          26,
+          37,
+          42
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      }
+    },
+    "order": 0,
+    "text": {
+      "choices": [
+        "swings and lands in her arms.",
+        "pulls the barbell forward.",
+        "pulls a rope attached to the barbell.",
+        "stands and lifts the weight over her head."
+      ],
+      "gold": 3,
+      "query": "Clean and jerk: A lady walks to a barbell. She bends down and grabs the pole. The lady"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -67.6968002319336,
+          -50.736175537109375,
+          -41.44794464111328,
+          -44.843116760253906
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p1_s25": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -69.1131591796875,
+          -50.91286087036133,
+          -43.64044952392578,
+          -46.07601547241211
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p1_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -75.564453125,
+          -62.055686950683594,
+          -50.89302062988281,
+          -57.6679801940918
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p1_s75": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -125.30158996582031,
+          -135.37083435058594,
+          -121.7832260131836,
+          -114.68597412109375
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 3,
+        "prediction_norm": 0
+      },
+      "p2_2to4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -70.83000183105469,
+          -70.32682800292969,
+          -51.5174674987793,
+          -56.31036376953125
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p2_s25": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -69.24427032470703,
+          -52.27524185180664,
+          -41.803367614746094,
+          -44.757076263427734
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p2_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -67.7594223022461,
+          -54.410526275634766,
+          -43.671058654785156,
+          -49.386932373046875
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p2_s75": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -116.09481811523438,
+          -141.677490234375,
+          -94.44146728515625,
+          -109.94158935546875
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "p3_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -68.93831634521484,
+          -56.011051177978516,
+          -44.29141616821289,
+          -47.77836608886719
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p3_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -120.04533386230469,
+          -149.81982421875,
+          -91.81663513183594,
+          -116.2748031616211
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q1_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -72.75985717773438,
+          -58.11415481567383,
+          -47.995513916015625,
+          -51.232757568359375
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q1_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -66.81315612792969,
+          -51.226043701171875,
+          -43.30796432495117,
+          -47.574562072753906
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q1_b8": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -67.99671173095703,
+          -50.85020446777344,
+          -41.463356018066406,
+          -44.74308395385742
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q2_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -64.64306640625,
+          -54.10772705078125,
+          -43.56369400024414,
+          -44.82061767578125
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q2_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -65.69664001464844,
+          -52.73657989501953,
+          -41.358558654785156,
+          -45.62744140625
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q2_b8": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -67.59931945800781,
+          -50.68629455566406,
+          -41.45072937011719,
+          -44.79874038696289
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q3_b3": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -139.2316131591797,
+          -127.8525161743164,
+          -118.42863464355469,
+          -117.61366271972656
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 3,
+        "prediction_norm": 0
+      },
+      "q3_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -140.6363525390625,
+          -133.4837188720703,
+          -97.16958618164062,
+          -110.07443237304688
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q3m_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -68.37274169921875,
+          -55.64794921875,
+          -50.08815002441406,
+          -47.08318328857422
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 3,
+        "prediction_norm": 1
+      },
+      "q3m_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -68.37982940673828,
+          -52.05836486816406,
+          -40.614776611328125,
+          -42.235595703125
+        ],
+        "n_chars": [
+          53,
+          47,
+          41,
+          38
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      }
+    },
+    "order": 1,
+    "text": {
+      "choices": [
+        "fight robots of evil and ends with a to be continued.",
+        "are then shown in closeups shooting a shot put.",
+        "push a child in a speedboat in the water.",
+        "look in the cameraman's eye and smile."
+      ],
+      "gold": 0,
+      "query": "Sumo: A cartoon animation video is shown with people wandering around and rockets being shot. Two men"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -34.70214080810547,
+          -77.87197875976562,
+          -23.50491714477539,
+          -68.32164764404297
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "p1_s25": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -37.181396484375,
+          -81.23899841308594,
+          -25.14839744567871,
+          -73.26713562011719
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "p1_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -43.0952033996582,
+          -96.2220458984375,
+          -36.62858581542969,
+          -85.23338317871094
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "p1_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -122.40859985351562,
+          -206.38656616210938,
+          -65.11197662353516,
+          -199.8677978515625
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p2_2to4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -42.2292594909668,
+          -83.78534698486328,
+          -28.81991195678711,
+          -73.26653289794922
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p2_s25": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -35.927040100097656,
+          -81.08680725097656,
+          -20.925722122192383,
+          -69.67472839355469
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p2_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -39.0270881652832,
+          -83.80783081054688,
+          -29.27118682861328,
+          -76.48731994628906
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "p2_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -92.30436706542969,
+          -173.63546752929688,
+          -50.461692810058594,
+          -151.85626220703125
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "p3_s50": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -41.90055465698242,
+          -81.94979095458984,
+          -31.129236221313477,
+          -76.84854125976562
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p3_s75": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -96.06513977050781,
+          -185.68641662597656,
+          -54.743675231933594,
+          -152.98159790039062
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 3
+      },
+      "q1_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -45.518653869628906,
+          -82.59114074707031,
+          -20.918212890625,
+          -75.73123168945312
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q1_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -36.48939895629883,
+          -76.30191040039062,
+          -29.230789184570312,
+          -74.33796691894531
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "q1_b8": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -34.78506088256836,
+          -77.69000244140625,
+          -23.491743087768555,
+          -68.15501403808594
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "q2_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -38.25566101074219,
+          -80.34445190429688,
+          -22.314838409423828,
+          -75.09843444824219
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q2_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -35.620941162109375,
+          -74.48284912109375,
+          -23.757808685302734,
+          -70.22402954101562
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "q2_b8": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -34.784034729003906,
+          -77.87362670898438,
+          -23.656686782836914,
+          -68.42733764648438
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      },
+      "q3_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -138.7628936767578,
+          -222.43190002441406,
+          -57.97235870361328,
+          -179.8701171875
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q3_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -97.25093078613281,
+          -132.87908935546875,
+          -42.9373779296875,
+          -149.8166046142578
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q3m_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -44.153900146484375,
+          -89.11325073242188,
+          -24.087112426757812,
+          -72.09697723388672
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 2
+      },
+      "q3m_b4": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -38.54685974121094,
+          -78.68638610839844,
+          -27.488868713378906,
+          -75.57787322998047
+        ],
+        "n_chars": [
+          42,
+          84,
+          26,
+          73
+        ],
+        "prediction": 2,
+        "prediction_norm": 0
+      }
+    },
+    "order": 2,
+    "text": {
+      "choices": [
+        "then cuts off the excess hair of the wood.",
+        "scrapes the wood with a broom in the cutting tool used in sharpening the instrument.",
+        "writes on the board again.",
+        "then notices a little black and green poisonous frog sitting next to him."
+      ],
+      "gold": 3,
+      "query": "Sharpening knives: The stone particles stick to the wet piece of wood. He then takes the knife and sharpens it against the wood piece. He"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -70.2670669555664,
+          -51.25962829589844,
+          -26.487791061401367,
+          -48.69810104370117
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p1_s25": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -78.86344909667969,
+          -51.356075286865234,
+          -28.940685272216797,
+          -45.435386657714844
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p1_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -108.78578186035156,
+          -69.85430908203125,
+          -37.285789489746094,
+          -61.415992736816406
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p1_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -193.16717529296875,
+          -155.79296875,
+          -72.50468444824219,
+          -131.95266723632812
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p2_2to4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -97.07107543945312,
+          -65.8595962524414,
+          -30.01266860961914,
+          -53.0106201171875
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p2_s25": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -71.65747833251953,
+          -52.74324035644531,
+          -27.163684844970703,
+          -48.28235626220703
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p2_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -81.78250122070312,
+          -53.4432373046875,
+          -25.942676544189453,
+          -47.082820892333984
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p2_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -172.523193359375,
+          -117.99462890625,
+          -64.30323028564453,
+          -100.78158569335938
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p3_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -83.33206176757812,
+          -52.839927673339844,
+          -26.129026412963867,
+          -47.0090217590332
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "p3_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -186.89093017578125,
+          -129.45692443847656,
+          -70.15324401855469,
+          -104.26536560058594
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q1_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -90.55397033691406,
+          -59.590797424316406,
+          -33.52088928222656,
+          -48.78363037109375
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q1_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -72.42101287841797,
+          -55.039581298828125,
+          -28.260330200195312,
+          -48.67819595336914
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q1_b8": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -70.17616271972656,
+          -51.19335174560547,
+          -26.60988998413086,
+          -48.72437286376953
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q2_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -84.47327423095703,
+          -56.08277130126953,
+          -32.495452880859375,
+          -50.22090530395508
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q2_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -74.40582275390625,
+          -51.11607360839844,
+          -27.814661026000977,
+          -49.0542106628418
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q2_b8": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -70.73493957519531,
+          -51.28477096557617,
+          -26.438030242919922,
+          -48.74317932128906
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q3_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -197.05288696289062,
+          -157.4249267578125,
+          -70.3896484375,
+          -109.40724182128906
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 3
+      },
+      "q3_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -159.83213806152344,
+          -140.58419799804688,
+          -59.20104217529297,
+          -94.4144515991211
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 3
+      },
+      "q3m_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -94.91632080078125,
+          -58.431766510009766,
+          -30.299467086791992,
+          -54.51280975341797
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      },
+      "q3m_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -73.43486022949219,
+          -52.05242919921875,
+          -26.363767623901367,
+          -48.55453109741211
+        ],
+        "n_chars": [
+          76,
+          75,
+          28,
+          54
+        ],
+        "prediction": 2,
+        "prediction_norm": 1
+      }
+    },
+    "order": 3,
+    "text": {
+      "choices": [
+        "eventually gets to get up and marches out of the room waving its body about.",
+        "then starts to get up from the chair and begins walking towards the camera.",
+        "then escapes and jumps away.",
+        "is acting crazy and attacking him while he is cooking."
+      ],
+      "gold": 2,
+      "query": "Sharpening knives: He then takes the knife and sharpens it against the wood piece. He then notices a little black and green poisonous frog sitting next to him. The frog"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -58.70708465576172,
+          -88.49573516845703,
+          -54.14434051513672,
+          -45.524078369140625
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p1_s25": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -61.62419891357422,
+          -90.10891723632812,
+          -56.416404724121094,
+          -51.67885971069336
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p1_s50": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -82.08456420898438,
+          -111.94129943847656,
+          -74.8987045288086,
+          -56.68175506591797
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p1_s75": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -134.953125,
+          -232.5716552734375,
+          -162.65969848632812,
+          -131.42286682128906
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p2_2to4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -65.71604919433594,
+          -99.02490997314453,
+          -67.96117401123047,
+          -49.202781677246094
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p2_s25": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -61.24543762207031,
+          -89.30986785888672,
+          -53.73402404785156,
+          -47.90890884399414
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p2_s50": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -59.62541961669922,
+          -91.67188262939453,
+          -51.351280212402344,
+          -42.22190856933594
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p2_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -114.81031799316406,
+          -200.90699768066406,
+          -161.61793518066406,
+          -98.44559478759766
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p3_s50": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -57.80149459838867,
+          -92.3388442993164,
+          -54.48157501220703,
+          -43.878623962402344
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p3_s75": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -114.70587921142578,
+          -209.04762268066406,
+          -169.60400390625,
+          -102.85009765625
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q1_b3": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -81.34512329101562,
+          -119.83073425292969,
+          -73.93173217773438,
+          -68.09210205078125
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q1_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -58.14433288574219,
+          -85.47348022460938,
+          -53.706024169921875,
+          -44.50111389160156
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q1_b8": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -58.450225830078125,
+          -88.66636657714844,
+          -54.301307678222656,
+          -45.40569305419922
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q2_b3": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -65.42029571533203,
+          -97.30323028564453,
+          -61.55464172363281,
+          -52.310272216796875
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q2_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -57.5338134765625,
+          -85.01439666748047,
+          -53.96199417114258,
+          -43.42573547363281
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q2_b8": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -58.84861755371094,
+          -88.26190185546875,
+          -54.18359375,
+          -45.384246826171875
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q3_b3": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -138.25257873535156,
+          -260.831787109375,
+          -186.4322967529297,
+          -172.93399047851562
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 0,
+        "prediction_norm": 2
+      },
+      "q3_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -97.1993637084961,
+          -195.52687072753906,
+          -138.40365600585938,
+          -105.15460968017578
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 0,
+        "prediction_norm": 2
+      },
+      "q3m_b3": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -76.40386962890625,
+          -105.21058654785156,
+          -63.40663146972656,
+          -62.08417510986328
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q3m_b4": {
+        "correct": 0,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -60.63762664794922,
+          -87.09208679199219,
+          -56.20549011230469,
+          -48.590057373046875
+        ],
+        "n_chars": [
+          54,
+          93,
+          79,
+          54
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      }
+    },
+    "order": 4,
+    "text": {
+      "choices": [
+        "sits and hugs another man and also adjusts his camera.",
+        "then sits there staring at his text machine as if he has actually been given a gift from god.",
+        "explains how the frog secretes a poisonous fluid that can be extremely harmful.",
+        "takes the frog on his hand and tickles the back of it."
+      ],
+      "gold": 2,
+      "query": "Sharpening knives: He then notices a little black and green poisonous frog sitting next to him. The frog then escapes and jumps away. He"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -47.573116302490234,
+          -33.569480895996094,
+          -72.1430892944336,
+          -85.88966369628906
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p1_s25": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -42.85188293457031,
+          -33.4815559387207,
+          -65.59661865234375,
+          -84.20454406738281
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p1_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -43.98143005371094,
+          -40.713775634765625,
+          -78.4856948852539,
+          -103.80033874511719
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p1_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -144.24050903320312,
+          -85.33125305175781,
+          -191.59228515625,
+          -280.7669372558594
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p2_2to4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -46.22283172607422,
+          -37.66917419433594,
+          -72.41487121582031,
+          -102.78138732910156
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p2_s25": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -49.959747314453125,
+          -33.94874572753906,
+          -68.56407928466797,
+          -84.7776107788086
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p2_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -46.374855041503906,
+          -35.5213623046875,
+          -71.54024505615234,
+          -90.86798095703125
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p2_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -149.2061767578125,
+          -77.07450866699219,
+          -132.4962615966797,
+          -244.4052276611328
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "p3_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -47.158477783203125,
+          -36.85189437866211,
+          -71.06915283203125,
+          -95.4317398071289
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "p3_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -168.3435821533203,
+          -83.19827270507812,
+          -144.52877807617188,
+          -273.066162109375
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "q1_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -64.3565673828125,
+          -41.849952697753906,
+          -75.46778869628906,
+          -104.2435073852539
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q1_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -45.153480529785156,
+          -31.40601921081543,
+          -77.64835357666016,
+          -86.8095474243164
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q1_b8": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -47.43169403076172,
+          -33.774681091308594,
+          -71.74737548828125,
+          -85.84150695800781
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q2_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -50.032859802246094,
+          -36.455665588378906,
+          -71.70333862304688,
+          -93.9193115234375
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q2_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -45.19136047363281,
+          -33.89052963256836,
+          -76.01831817626953,
+          -84.35051727294922
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q2_b8": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -47.84832763671875,
+          -33.62700653076172,
+          -72.3371810913086,
+          -85.860107421875
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q3_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -167.90533447265625,
+          -100.97647857666016,
+          -197.82766723632812,
+          -258.3892822265625
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 3
+      },
+      "q3_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -148.04092407226562,
+          -69.27957153320312,
+          -127.76202392578125,
+          -203.08456420898438
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 2
+      },
+      "q3m_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -65.926513671875,
+          -39.842926025390625,
+          -90.18391418457031,
+          -108.17677307128906
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q3m_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -48.67106628417969,
+          -35.279388427734375,
+          -73.87400817871094,
+          -85.61616516113281
+        ],
+        "n_chars": [
+          68,
+          33,
+          68,
+          108
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      }
+    },
+    "order": 5,
+    "text": {
+      "choices": [
+        "sharpens and cuts something on a knife board using an electric tool.",
+        "then continues cutting his onion.",
+        "travels with his knife under the table and uses it also in his shoe.",
+        "then shows her a spare knife that he has also used on a knife sharpener and drills into a side of the table."
+      ],
+      "gold": 1,
+      "query": "Sharpening knives: A woman is reading a newspaper nearby while he speaks to her and shows her something in his hand. The man sharpens his knives using an electric tool. He"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -46.034523010253906,
+          -60.90049362182617,
+          -58.990394592285156,
+          -31.78350257873535
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p1_s25": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -52.076026916503906,
+          -61.12467956542969,
+          -61.275550842285156,
+          -30.686946868896484
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p1_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -67.43573760986328,
+          -74.6661376953125,
+          -77.36143493652344,
+          -46.576080322265625
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p1_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -155.700927734375,
+          -177.8590850830078,
+          -175.37945556640625,
+          -125.27104187011719
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p2_2to4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -51.31995391845703,
+          -68.54756927490234,
+          -66.01805877685547,
+          -39.098270416259766
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p2_s25": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -45.719764709472656,
+          -61.25921630859375,
+          -59.193641662597656,
+          -32.0777587890625
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p2_s50": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -48.32344436645508,
+          -58.794891357421875,
+          -62.585933685302734,
+          -34.89833450317383
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p2_s75": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -131.53634643554688,
+          -170.30584716796875,
+          -172.49244689941406,
+          -100.11640930175781
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "p3_s50": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -49.18848419189453,
+          -57.616722106933594,
+          -60.932884216308594,
+          -36.271217346191406
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "p3_s75": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -136.96951293945312,
+          -168.25909423828125,
+          -168.20968627929688,
+          -107.60870361328125
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 2
+      },
+      "q1_b3": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -55.66741180419922,
+          -69.01390075683594,
+          -64.44452667236328,
+          -35.49978256225586
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q1_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -44.42808151245117,
+          -62.07438659667969,
+          -61.41777801513672,
+          -35.721717834472656
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 0
+      },
+      "q1_b8": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -46.06641387939453,
+          -61.06721878051758,
+          -59.186180114746094,
+          -31.879135131835938
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q2_b3": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -51.36121368408203,
+          -66.8197250366211,
+          -64.85926818847656,
+          -32.17320251464844
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q2_b4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -46.03379821777344,
+          -57.734683990478516,
+          -56.42512512207031,
+          -31.531475067138672
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q2_b8": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -46.00023651123047,
+          -60.81271743774414,
+          -58.70664978027344,
+          -31.876415252685547
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      },
+      "q3_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -124.76351928710938,
+          -149.2610626220703,
+          -179.01113891601562,
+          -104.96011352539062
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 1
+      },
+      "q3_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -106.45539093017578,
+          -141.51971435546875,
+          -155.07452392578125,
+          -96.17921447753906
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 0
+      },
+      "q3m_b3": {
+        "correct": 0,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -53.677696228027344,
+          -75.28137969970703,
+          -70.53581237792969,
+          -58.82185363769531
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 0,
+        "prediction_norm": 2
+      },
+      "q3m_b4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -43.116607666015625,
+          -65.72626495361328,
+          -64.77801513671875,
+          -32.442657470703125
+        ],
+        "n_chars": [
+          52,
+          65,
+          69,
+          41
+        ],
+        "prediction": 3,
+        "prediction_norm": 3
+      }
+    },
+    "order": 6,
+    "text": {
+      "choices": [
+        "goes to the bathroom and isn't able to get very far.",
+        "puts the glass aside and a fourth person walks in and walks away.",
+        "plays the bagpipe and smiles and laughs as he enjoys the hospitality.",
+        "gets up and walks away to the other room."
+      ],
+      "gold": 3,
+      "query": "Having an ice cream: The family enjoys eating the desert together. The people in the restaurant laugh at the man and he wonders what they are doing. The man"
+    }
+  },
+  {
+    "conditions": {
+      "fp16": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -96.05825805664062,
+          -29.310924530029297,
+          -73.57173156738281,
+          -131.22874450683594
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p1_s25": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -99.0311279296875,
+          -29.907814025878906,
+          -75.54158782958984,
+          -131.8519744873047
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p1_s50": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -110.68960571289062,
+          -41.20490264892578,
+          -91.90318298339844,
+          -176.89247131347656
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p1_s75": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -297.70245361328125,
+          -125.32563781738281,
+          -203.20028686523438,
+          -400.3662109375
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p2_2to4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -99.64995574951172,
+          -26.86142349243164,
+          -85.81819152832031,
+          -133.6214141845703
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p2_s25": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -92.91624450683594,
+          -28.393596649169922,
+          -72.97807312011719,
+          -128.5026397705078
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p2_s50": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -92.13713073730469,
+          -28.513423919677734,
+          -76.68527221679688,
+          -127.80299377441406
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p2_s75": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -190.31381225585938,
+          -86.26123809814453,
+          -168.64291381835938,
+          -319.91217041015625
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p3_s50": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -91.61449432373047,
+          -29.258617401123047,
+          -75.62620544433594,
+          -125.86450958251953
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "p3_s75": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -212.18544006347656,
+          -97.43562316894531,
+          -181.72442626953125,
+          -355.3841552734375
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q1_b3": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -105.53269958496094,
+          -34.210208892822266,
+          -86.05831909179688,
+          -138.07217407226562
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q1_b4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -94.2459716796875,
+          -28.367919921875,
+          -76.20355224609375,
+          -133.02456665039062
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q1_b8": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -96.08804321289062,
+          -29.337051391601562,
+          -73.73558807373047,
+          -131.25735473632812
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q2_b3": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -96.48399353027344,
+          -29.247474670410156,
+          -76.29493713378906,
+          -131.20443725585938
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q2_b4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -94.03926849365234,
+          -28.358306884765625,
+          -77.52566528320312,
+          -131.81170654296875
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q2_b8": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -96.05455780029297,
+          -29.358600616455078,
+          -73.60881042480469,
+          -131.43289184570312
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q3_b3": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -253.5985870361328,
+          -128.32159423828125,
+          -226.99472045898438,
+          -392.16998291015625
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q3_b4": {
+        "correct": 1,
+        "correct_norm": 0,
+        "loglikelihoods": [
+          -195.71559143066406,
+          -116.49349975585938,
+          -176.08665466308594,
+          -281.9551696777344
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 0
+      },
+      "q3m_b3": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -97.49615478515625,
+          -34.97025680541992,
+          -83.39778137207031,
+          -138.7857666015625
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      },
+      "q3m_b4": {
+        "correct": 1,
+        "correct_norm": 1,
+        "loglikelihoods": [
+          -95.64857482910156,
+          -27.797962188720703,
+          -74.57628631591797,
+          -131.35791015625
+        ],
+        "n_chars": [
+          107,
+          50,
+          76,
+          138
+        ],
+        "prediction": 1,
+        "prediction_norm": 1
+      }
+    },
+    "order": 7,
+    "text": {
+      "choices": [
+        "played paper if and shoot the arrows to hit the target, then he hang from the board with his bow and arrow.",
+        "went to the target board and talked to the camera.",
+        "eventually throw the arrow, but it flew into the gravel is near the targets.",
+        "have his bow as he talk to the camera, he pulled it out to show how to put with its flex, tighten, and notch that was attached to his bow."
+      ],
+      "gold": 1,
+      "query": "Archery: A man in brown jacket is pulling out an arrow from the target board, then he was talking to the camera, then he pull out his bow and started to use it with his bow to hit the target board, he fired his bows several times. The man"
+    }
+  }
+]
