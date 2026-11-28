@@ -36,7 +36,16 @@ from task1.src.constants import (
     PRUNE_SPARSITIES,
     QUANT_BITS,
 )
-from task1.src.data import TestFileGate, load_locked, require_locked, token_rows, write_json, write_jsonl
+from task1.src import run_profile
+from task1.src.data import (
+    TestFileGate,
+    load_locked,
+    require_locked,
+    require_present,
+    token_rows,
+    write_json,
+    write_jsonl,
+)
 from task1.src.evaluate import development_nll, evaluate_hellaswag, evaluate_windows
 from task1.src.model_ops import (
     collect_activation_stats,
@@ -97,6 +106,7 @@ def _runtime(model) -> dict:
         "group_size": GROUP_SIZE,
         "execution": "dense_fp16",
         "packed_kernel": False,
+        "smoke": run_profile.current().smoke,
     }
 
 
@@ -108,37 +118,62 @@ def _peak_now() -> int | None:
     return int(torch.cuda.max_memory_allocated())
 
 
-def _prepare(output: Path):
-    set_seed(DEFAULT_SEED)
+def _start(output: Path) -> None:
+    """Cheap checks that must pass before any weight is loaded."""
+    run_profile.check_output_dir(output, run_profile.current())
     output.mkdir(parents=True, exist_ok=True)
+
+
+def _prepare(output: Path):
+    _start(output)
+    set_seed(DEFAULT_SEED)
     model, tokenizer = load_qwen()
     modules = list_eligible(model)
     census = parameter_census(model)
     validate_layout(model, census)
+    profile = run_profile.current()
+    if profile.last_layer_only:
+        # Smoke: compress the last block only; the rest stay FP16 and are counted as excluded.
+        modules = run_profile.select_modules(modules, int(model.config.num_hidden_layers), profile)
+        census = parameter_census(model, modules)
+        print(f"SMOKE profile: {len(modules)} eligible projections, sizes {profile.as_dict()}", flush=True)
     snapshot = snapshot_state(model)
     return model, tokenizer, modules, census, snapshot
 
 
 def _load_calibration(gate: TestFileGate):
+    profile = run_profile.current()
     calibration = token_rows(load_locked("calibration", gate))
     development = token_rows(load_locked("development", gate))
+    run_profile.check_split_sizes(calibration, development, profile)
+    calibration = run_profile.shrink_rows(calibration, profile.calibration_sequences, profile.sequence_length)
+    development = run_profile.shrink_rows(development, profile.development_sequences, profile.sequence_length)
     return calibration, development
 
 
 def _load_tests(gate: TestFileGate):
     if not gate.frozen:
         raise RuntimeError("test files were requested before the allocation freeze")
+    profile = run_profile.current()
     wiki = load_locked("wikitext", gate)
     c4 = load_locked("c4_validation", gate)
     hellaswag = load_locked("hellaswag", gate)
     hellaswag = sorted(hellaswag, key=lambda row: int(row["order"]))
+    if profile.eval_windows is not None:
+        wiki = wiki[: profile.eval_windows]
+        c4 = c4[: profile.eval_windows]
+    if profile.hellaswag_full is not None:
+        hellaswag = hellaswag[: profile.hellaswag_full]
+    if not wiki or not c4 or not hellaswag:
+        raise SystemExit("a locked test split is empty")
     return wiki, c4, hellaswag
 
 
 def _hellaswag_slice(records: list[dict], condition: str) -> tuple[list[dict], str]:
     if condition in FULL_HELLASWAG_CONDITIONS:
         return records, "full"
-    return records[:HELLASWAG_DIAGNOSTIC], "diagnostic_512"
+    limit = run_profile.current().hellaswag_diagnostic
+    return records[:limit], "diagnostic_512" if limit == HELLASWAG_DIAGNOSTIC else f"diagnostic_{limit}"
 
 
 def _json_record(name: str, module, payload: dict, extra: dict | None = None) -> dict:
@@ -191,6 +226,12 @@ def _save_condition(output: Path, summary: dict, wiki: dict | None, c4: dict | N
         }
     if hellaswag_rows is not None:
         write_jsonl(folder / "hellaswag.jsonl", hellaswag_rows)
+    profile = run_profile.current()
+    summary["smoke"] = profile.smoke
+    if profile.smoke:
+        summary["smoke_profile"] = profile.as_dict()
+        summary["smoke_note"] = "SMOKE RUN: tiny sizes and two layers. Not a reportable result."
+    # summary.json is written last (atomically); _condition_done keys on it.
     write_json(folder / "summary.json", summary)
 
 
@@ -207,12 +248,24 @@ def _evaluate(model, tokenizer, wiki, c4, hellaswag, condition: str):
 def _latency(model, skip: bool):
     if skip:
         return None
-    return measure_latencies(model, int(model.config.vocab_size))
+    profile = run_profile.current()
+    return measure_latencies(
+        model,
+        int(model.config.vocab_size),
+        decode_tokens=profile.decode_tokens,
+        warmup=profile.timing_warmup,
+        repeats=profile.timing_repeats,
+    )
 
 
 def run_baseline(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
     gate = TestFileGate()
     gate.freeze("fp16 baseline has no sparsity or bit allocation")
+    _start(output)
+    if _condition_done(output, "fp16"):
+        print("baseline: fp16 already written, skipping", flush=True)
+        _write_index(output, ["fp16"])
+        return
     require_locked(["wikitext", "c4_validation", "hellaswag"], gate)
     model, tokenizer, modules, census, _snapshot = _prepare(output)
     wiki, c4, hellaswag = _load_tests(gate)
@@ -241,7 +294,8 @@ def run_baseline(output: Path, microbatch: int = 4, skip_latency: bool = False) 
     }
     _ = modules
     _save_condition(output, summary, wiki_metrics, c4_metrics, hs_rows)
-    write_json(output / "index.json", {"conditions": ["fp16"]})
+    # Merge, never overwrite: a rerun must not drop conditions other stages already listed.
+    _write_index(output, ["fp16"])
     print("baseline: wrote", output / "conditions" / "fp16" / "summary.json", flush=True)
 
 
@@ -261,8 +315,10 @@ def _wanda_relative(model, modules, calibration, microbatch, stats, sparsity: fl
     for name, module in modules:
         built = prune_matrix(read_weight(module), stats[name]["column_l2"], "wanda", sparsity)
         recon[name] = _as_fp16(built["values"])
+        del built
     measured = measure_reconstruction(model, modules, calibration, microbatch, recon)
-    return {name: measured[name]["relative_mse"] for name in recon}
+    del recon
+    return {name: measured[name]["relative_mse"] for name, _module in modules}
 
 
 def _apply_prune_method(modules, stats, method: str, sparsity: float, zero_counts: dict[str, int] | None = None):
@@ -280,6 +336,7 @@ def _apply_prune_method(modules, stats, method: str, sparsity: float, zero_count
         values[name] = _as_fp16(built["values"])
         nonzero += int(built["nonzero"])
         records.append(_json_record(name, module, built))
+        del built, weight
     return values, records, nonzero
 
 
@@ -294,11 +351,30 @@ def _p3_counts(modules, sensitivities: dict[str, float], sparsity: float, tau: f
     return {size.name: count for size, count in zip(sizes, zeros)}
 
 
+TEST_KINDS = ["wikitext", "c4_validation", "hellaswag"]
+PRUNE_CONDITIONS = ("p1_s25", "p1_s50", "p1_s75", "p2_s25", "p2_s50", "p2_s75", "p2_2to4", "p3_s50", "p3_s75")
+QUANT_CONDITIONS = tuple(f"q{family}_b{bits}" for bits in QUANT_BITS for family in (1, 2)) + ("q3_b4", "q3_b3")
+
+
+def _all_done(output: Path, stage: str, conditions) -> bool:
+    """True (and the index refreshed) when a resumed stage has nothing left to evaluate."""
+    if all(_condition_done(output, condition) for condition in conditions):
+        print(f"{stage}: every condition already written, nothing to do", flush=True)
+        _write_index(output, list(conditions))
+        return True
+    return False
+
+
 def run_prune(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
     gate = TestFileGate()
+    _start(output)
+    if _all_done(output, "prune", PRUNE_CONDITIONS):
+        return
     require_locked(["calibration", "development"], gate)
-    model, tokenizer, modules, census, snapshot = _prepare(output)
+    # Existence only (no test file is opened): a missing lock must fail now, not after the tau search.
+    require_present(TEST_KINDS)
     calibration, development = _load_calibration(gate)
+    model, tokenizer, modules, census, snapshot = _prepare(output)
     print("prune: collecting calibration activations", flush=True)
     stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
     cached = _load_p3_cache(output)
@@ -348,6 +424,7 @@ def _select_p3_tau(model, modules, calibration, development, microbatch, stats, 
             counts = _p3_counts(modules, sensitivity[sparsity], sparsity, tau)
             values, _records, _nonzero = _apply_prune_method(modules, stats, "p3", sparsity, counts)
             _commit(model, modules, values, [])
+            del values
             scored = development_nll(model, development)
             per_sparsity[str(sparsity)] = {
                 "mean_nll": scored["mean_nll"],
@@ -362,7 +439,7 @@ def _select_p3_tau(model, modules, calibration, development, microbatch, stats, 
             "per_sparsity": per_sparsity,
         }
         print(f"prune: tau={tau} development mean NLL={tau_report[str(tau)]['mean_nll']:.6f}", flush=True)
-    winner = min(P3_TAUS, key=lambda tau: (tau_report[str(tau)]["mean_nll"], tau))
+    winner = min(P3_TAUS, key=lambda tau: (_nan_last(tau_report[str(tau)]["mean_nll"]), tau))
     selection = {
         "taus": list(P3_TAUS),
         "winner": winner,
@@ -373,6 +450,12 @@ def _select_p3_tau(model, modules, calibration, development, microbatch, stats, 
     }
     write_json(output / "allocation" / "p3_tau.json", selection)
     return sensitivity, selection
+
+
+def _nan_last(value: float) -> float:
+    """A NaN score (fp16 overflow in a broken model) ranks last instead of poisoning min()."""
+    value = float(value)
+    return float("inf") if value != value else value
 
 
 def _prune_conditions(output, model, tokenizer, modules, census, snapshot, calibration, microbatch, skip_latency,
@@ -406,6 +489,7 @@ def _prune_conditions(output, model, tokenizer, modules, census, snapshot, calib
             record["relative_mse"] = detail["relative_mse"]
             record["mse"] = detail["mse"]
         _commit(model, modules, values, [])
+        del values, measured
         unique_seconds = time.perf_counter() - started
         wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, condition)
         storage = sparse_storage_bytes(census["n_eligible"], nonzero, census["n_excluded"])
@@ -562,20 +646,75 @@ def _packed_bytes_for(modules, census, bit_of: dict[str, int], mode_of: dict[str
     return quantized_model_bytes(projections, census["n_excluded"])["packed_bytes"]
 
 
-def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
-    gate = TestFileGate()
-    require_locked(["calibration", "development"], gate)
-    model, tokenizer, modules, census, snapshot = _prepare(output)
-    calibration, development = _load_calibration(gate)
-    print("quantize: collecting calibration activations", flush=True)
-    stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
+ALPHA_SEARCH_FILE = "q2_alpha_search.json"
+
+
+def _save_alpha_search(output: Path, alphas: dict[int, dict], mse_tables: dict[int, dict]) -> None:
+    write_json(
+        output / "allocation" / ALPHA_SEARCH_FILE,
+        {
+            "grid": list(AWQ_ALPHAS),
+            "selection": "smallest calibration output MSE per projection; ties keep the smaller alpha",
+            "selection_data": "calibration only; written before any test file is opened",
+            "bits": {
+                str(bits): {
+                    "alphas": {name: float(value) for name, value in alphas[bits].items()},
+                    "mse_by_alpha": {
+                        name: {str(alpha): float(mse) for alpha, mse in table.items()}
+                        for name, table in mse_tables[bits].items()
+                    },
+                }
+                for bits in alphas
+            },
+        },
+    )
+
+
+def _load_alpha_search(output: Path, names: list[str]):
+    """Frozen alphas and MSE tables, or None. A file that does not cover ``names`` is ignored."""
+    path = output / "allocation" / ALPHA_SEARCH_FILE
+    if not path.is_file():
+        return None
+    raw = _read_json(path)
     alphas = {}
     mse_tables = {}
-    for bits in QUANT_BITS:
-        restore_state(model, snapshot)
-        chosen, table = _search_alphas(model, modules, calibration, microbatch, stats, bits)
-        alphas[bits] = chosen
-        mse_tables[bits] = table
+    for bits_key, entry in raw.get("bits", {}).items():
+        bits = int(bits_key)
+        alphas[bits] = {name: float(value) for name, value in entry["alphas"].items()}
+        mse_tables[bits] = {
+            name: {float(alpha): float(mse) for alpha, mse in table.items()}
+            for name, table in entry["mse_by_alpha"].items()
+        }
+    if set(alphas) != set(QUANT_BITS) or any(set(alphas[bits]) != set(names) for bits in alphas):
+        print(f"quantize: {path} does not cover this run's projections; searching again", flush=True)
+        return None
+    return alphas, mse_tables
+
+
+def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) -> None:
+    gate = TestFileGate()
+    _start(output)
+    if _all_done(output, "quantize", QUANT_CONDITIONS):
+        return
+    require_locked(["calibration", "development"], gate)
+    require_present(TEST_KINDS)
+    calibration, development = _load_calibration(gate)
+    model, tokenizer, modules, census, snapshot = _prepare(output)
+    print("quantize: collecting calibration activations", flush=True)
+    stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
+    cached = _load_alpha_search(output, [name for name, _module in modules])
+    if cached is not None:
+        alphas, mse_tables = cached
+        print(f"quantize: reusing frozen alpha search from {output / 'allocation' / ALPHA_SEARCH_FILE}", flush=True)
+    else:
+        alphas = {}
+        mse_tables = {}
+        for bits in QUANT_BITS:
+            restore_state(model, snapshot)
+            chosen, table = _search_alphas(model, modules, calibration, microbatch, stats, bits)
+            alphas[bits] = chosen
+            mse_tables[bits] = table
+        _save_alpha_search(output, alphas, mse_tables)
     modes = _scale_plan(modules, stats, alphas[4])
 
     # Budgets use the same byte function as the Q3 trial maps.
@@ -620,21 +759,26 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
     gate.freeze("Q3 bit maps written")
     # Development diagnostic after the freeze. It is not allowed to edit the maps.
     frozen_maps = {label: dict(allocation.bits) for label, allocation in allocations.items()}
-    dev_diag = {}
-    for label, allocation in allocations.items():
-        restore_state(model, snapshot)
-        values, recon, folds, _records = _build_quant(modules, stats, "q3", None, alphas[4], allocation.bits, q3_modes)
-        measured = measure_reconstruction(model, modules, development, microbatch, recon)
-        _commit(model, modules, values, folds)
-        scored = development_nll(model, development)
-        dev_diag[label] = {
-            "mean_nll": scored["mean_nll"],
-            "n_tokens": scored["n_tokens"],
-            "mean_projection_mse": float(np.mean([measured[name]["mse"] for name in measured])),
-        }
-        if allocation.bits != frozen_maps[label]:
-            raise RuntimeError("development diagnostic changed a frozen Q3 bit map")
-    write_json(output / "allocation" / "q3_development_diagnostic.json", dev_diag)
+    diag_path = output / "allocation" / "q3_development_diagnostic.json"
+    dev_diag = _read_json(diag_path) if diag_path.is_file() else None
+    if dev_diag is None or set(dev_diag) != set(allocations):
+        dev_diag = {}
+        for label, allocation in allocations.items():
+            restore_state(model, snapshot)
+            values, recon, folds, _records = _build_quant(modules, stats, "q3", None, alphas[4], allocation.bits, q3_modes)
+            measured = measure_reconstruction(model, modules, development, microbatch, recon)
+            del recon
+            _commit(model, modules, values, folds)
+            del values
+            scored = development_nll(model, development)
+            dev_diag[label] = {
+                "mean_nll": scored["mean_nll"],
+                "n_tokens": scored["n_tokens"],
+                "mean_projection_mse": float(np.mean([measured[name]["mse"] for name in measured])),
+            }
+            if allocation.bits != frozen_maps[label]:
+                raise RuntimeError("development diagnostic changed a frozen Q3 bit map")
+        write_json(diag_path, dev_diag)
     restore_state(model, snapshot)
     wiki, c4, hellaswag = _load_tests(gate)
     jobs = []
@@ -668,6 +812,7 @@ def run_quantize(output: Path, microbatch: int = 4, skip_latency: bool = False) 
             for record in records:
                 record["mse"] = measured[record["module"]]["mse"]
         _commit(model, modules, values, folds)
+        del values, recon, folds
         unique_seconds = time.perf_counter() - started
         storage = _quant_bytes(census, records)
         wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, condition)
@@ -772,19 +917,42 @@ def _q3m_budgets(modules, census, modes4: dict[str, str], q2: dict[int, dict]) -
     return budgets
 
 
+def _q3m_int4_alphas(output: Path, modules, q2_b4: dict) -> tuple[dict[str, float], dict[str, float], str]:
+    """Frozen Q2 INT4 alphas and their calibration MSE, without a second alpha search.
+
+    The quantize stage saved its search in allocation/q2_alpha_search.json before any test file
+    was opened. Re-searching would cost three calibration passes and could flip a near-tied alpha
+    if GPU arithmetic differed between sessions, so the frozen choice is reused and checked
+    against the alphas and MSE recorded in conditions/q2_b4.
+    """
+    names = [name for name, _module in modules]
+    recorded_mse = {row["module"]: float(row["mse"]) for row in q2_b4["projections"]}
+    cached = _load_alpha_search(output, names)
+    if cached is not None:
+        alphas = dict(cached[0][4])
+        mse4 = {name: float(cached[1][4][name][alphas[name]]) for name in names}
+        source = f"allocation/{ALPHA_SEARCH_FILE}"
+    else:
+        alphas = {row["module"]: float(row["alpha"]) for row in q2_b4["projections"]}
+        mse4 = dict(recorded_mse)
+        source = "conditions/q2_b4/summary.json projection records"
+    _q3m_check_alphas(modules, alphas, q2_b4)
+    wrong = [name for name in names if mse4[name] != recorded_mse.get(name)]
+    if wrong:
+        raise RuntimeError(f"INT4 MSE in {source} differs from conditions/q2_b4 on {len(wrong)} projections")
+    return alphas, mse4, source
+
+
 def _q3m_select(output, model, modules, census, calibration, microbatch, stats, q2):
     """Sensitivity passes and both knapsack maps. Reads calibration data only."""
     started = time.perf_counter()
-    print("quantize-q3m: INT4 alpha search (3 calibration passes)", flush=True)
-    alphas, alpha_table = _search_alphas(model, modules, calibration, microbatch, stats, 4)
-    _q3m_check_alphas(modules, alphas, q2[4])
-    print("quantize-q3m: INT4 alphas match conditions/q2_b4", flush=True)
+    alphas, mse4, source = _q3m_int4_alphas(output, modules, q2[4])
+    print(f"quantize-q3m: INT4 alphas and INT4 MSE from {source} (match conditions/q2_b4)", flush=True)
     modes = _scale_plan(modules, stats, alphas)
     budgets = _q3m_budgets(modules, census, modes, q2)
     print(f"quantize-q3m: budgets INT4={budgets[4]} INT3={budgets[3]} match the Q2 summaries", flush=True)
     names = [name for name, _module in modules]
-    mse = {name: {4: float(alpha_table[name][alphas[name]])} for name in names}
-    del alpha_table
+    mse = {name: {4: mse4[name]} for name in names}
     for bits in (2, 3, 8):
         measured = _awq_mse_at(model, modules, calibration, microbatch, stats, alphas, bits)
         for name in names:
@@ -861,9 +1029,11 @@ def run_quantize_q3m(output: Path, microbatch: int = 4, skip_latency: bool = Fal
         return
     q2 = {4: _read_summary(output, "q2_b4"), 3: _read_summary(output, "q2_b3")}
     gate = TestFileGate()
+    _start(output)
     require_locked(["calibration", "development"], gate)
-    model, tokenizer, modules, census, snapshot = _prepare(output)
+    require_present(TEST_KINDS)
     calibration, development = _load_calibration(gate)
+    model, tokenizer, modules, census, snapshot = _prepare(output)
     print("quantize-q3m: collecting calibration activations", flush=True)
     stats, stat_seconds, stat_peak = _stats(model, modules, calibration, microbatch)
     selection_seconds = None
@@ -921,7 +1091,7 @@ def run_quantize_q3m(output: Path, microbatch: int = 4, skip_latency: bool = Fal
             record["mse_by_bits"] = {str(b): mse[name][b] for b in (2, 3, 4, 8)}
             record["sensitivity"] = mse[name][4]
         _commit(model, modules, values, folds)
-        del values
+        del values, folds
         unique_seconds = time.perf_counter() - started
         storage = _quant_bytes(census, records)
         wiki_metrics, c4_metrics, hs_summary, hs_rows = _evaluate(model, tokenizer, wiki, c4, hellaswag, label)
@@ -941,7 +1111,7 @@ def run_quantize_q3m(output: Path, microbatch: int = 4, skip_latency: bool = Fal
             "shared_activation_seconds": stat_seconds,
             "unique_calibration_seconds": unique_seconds,
             "selection_seconds": selection_seconds,
-            "selection_note": "INT4 alpha re-search, INT2/3/8 calibration MSE passes and both knapsacks; null when frozen maps were reused.",
+            "selection_note": "INT2/3/8 calibration MSE passes and both knapsacks (INT4 alphas and MSE reused from the frozen Q2 search); null when frozen maps were reused.",
             "calibration_peak_allocated_bytes": stat_peak,
             "quality": {"hellaswag": hs_summary, "protocol": HELLASWAG_PROTOCOL},
             "latency": _latency(model, skip_latency),
@@ -962,8 +1132,20 @@ def run_quantize_q3m(output: Path, microbatch: int = 4, skip_latency: bool = Fal
 
 
 def _condition_done(output: Path, condition: str) -> bool:
-    """A condition is finished once its summary is on disk (summary.json is written last)."""
-    return (output / "conditions" / condition / "summary.json").is_file()
+    """A condition is finished once its summary is on disk (summary.json is written last).
+
+    A summary from the other profile (smoke versus real) is never accepted as done.
+    """
+    path = output / "conditions" / condition / "summary.json"
+    if not path.is_file():
+        return False
+    try:
+        smoke = run_profile.summary_is_smoke(path)
+    except ValueError as exc:
+        raise SystemExit(f"{path} is not valid JSON ({exc}); delete that condition folder and rerun") from exc
+    if smoke != run_profile.current().smoke:
+        raise SystemExit(f"{path} has smoke={smoke}, but this run has smoke={run_profile.current().smoke}")
+    return True
 
 
 def _write_index(output: Path, new_conditions: list[str]) -> None:
@@ -979,32 +1161,68 @@ def _write_index(output: Path, new_conditions: list[str]) -> None:
     write_json(index_path, {"conditions": existing})
 
 
-def run_resources(output: Path, microbatch: int = 4, remeasure: bool = False) -> None:
-    """Fill dense-FP16 latency for conditions whose summaries do not have it yet."""
+def _resource_conditions(output: Path) -> list[str]:
+    """Conditions in index.json plus any finished summary on disk, in index order."""
     import json
 
+    names: list[str] = []
     index_path = output / "index.json"
-    if not index_path.is_file():
-        raise SystemExit(f"No {index_path}. Run baseline, prune, and quantize before resources.")
-    names = json.loads(index_path.read_text(encoding="utf-8"))["conditions"]
+    if index_path.is_file():
+        names = list(json.loads(index_path.read_text(encoding="utf-8")).get("conditions", []))
+    for path in sorted(output.glob("conditions/*/summary.json")):
+        if path.parent.name not in names:
+            names.append(path.parent.name)
+    return [name for name in names if (output / "conditions" / name / "summary.json").is_file()]
+
+
+def _latency_ok(latency) -> bool:
+    """Recorded when the shortest prefill was timed (a 2048-token OOM is a recorded outcome)."""
+    prefill = (latency or {}).get("prefill") or {}
+    if not prefill:
+        return False
+    shortest = min(prefill, key=lambda key: int(key))
+    return prefill[shortest].get("status") == "ok"
+
+
+def run_resources(output: Path, microbatch: int = 4, remeasure: bool = False, only: list[str] | None = None) -> None:
+    """Fill dense-FP16 latency for conditions whose summaries do not have it yet.
+
+    ``remeasure`` times them again; ``only`` restricts the stage to the named conditions.
+    """
+    import json
+
+    _start(output)
+    names = _resource_conditions(output)
+    if only:
+        unknown = sorted(set(only) - set(names))
+        if unknown:
+            raise SystemExit(f"resources --only names conditions with no summary: {', '.join(unknown)}")
+        names = [name for name in names if name in set(only)]
+    if not names:
+        raise SystemExit(f"No condition summaries under {output}. Run baseline, prune, and quantize before resources.")
     pending = []
     for name in names:
         summary_path = output / "conditions" / name / "summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        latency = summary.get("latency")
-        if remeasure or not latency or latency.get("prefill", {}).get("512", {}).get("status") != "ok":
+        if bool(summary.get("smoke", False)) != run_profile.current().smoke:
+            raise SystemExit(f"{summary_path} does not match this run's smoke setting")
+        if remeasure or not _latency_ok(summary.get("latency")):
+            recipe = summary.get("recipe") or {}
+            if "family" not in recipe:
+                raise SystemExit(f"{summary_path} has no recipe; rerun that stage")
             pending.append((name, summary))
     if not pending:
         print("resources: latency already recorded for every condition", flush=True)
         return
     needs_stats = any(item[1]["recipe"]["family"] != "baseline" for item in pending)
+    gate = TestFileGate()
+    calibration = None
     if needs_stats:
-        require_locked(["calibration"], TestFileGate())
+        require_locked(["calibration", "development"], gate)
+        calibration, _development = _load_calibration(gate)
     model, _tokenizer, modules, _census, snapshot = _prepare(output)
     stats = None
     if needs_stats:
-        gate = TestFileGate()
-        calibration, _development = _load_calibration(gate)
         stats, _seconds, _peak = _stats(model, modules, calibration, microbatch)
     for name, summary in pending:
         print(f"resources: {name}", flush=True)
@@ -1023,6 +1241,7 @@ def run_resources(output: Path, microbatch: int = 4, remeasure: bool = False) ->
                 modules, stats, recipe["method"], float(recipe["sparsity"]), counts
             )
             _commit(model, modules, values, [])
+            del values
         elif recipe["family"] == "quantize" and recipe["method"] != "q1":
             if stats is None or recipe.get("alphas") is None:
                 raise SystemExit(f"{name} is missing frozen AWQ alphas; rerun quantize.")
@@ -1041,12 +1260,14 @@ def run_resources(output: Path, microbatch: int = 4, remeasure: bool = False) ->
                 modes,
             )
             _commit(model, modules, values, folds)
+            del values, _recon
         elif recipe["family"] == "quantize":
             values, _recon, folds, _records = _build_quant(
                 modules, stats, "q1", int(recipe["bits"]), None, None, None
             )
             _commit(model, modules, values, folds)
-        summary["latency"] = measure_latencies(model, int(model.config.vocab_size))
+            del values, _recon
+        summary["latency"] = _latency(model, False)
         write_json(output / "conditions" / name / "summary.json", summary)
     print("resources: done", flush=True)
 

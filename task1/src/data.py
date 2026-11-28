@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 from pathlib import Path
 
 from shared.paths import DATA_REPO_COMMIT, course_data_root
@@ -74,6 +75,14 @@ def require_locked(kinds: list[str], gate: TestFileGate) -> None:
             raise _missing(path)
 
 
+def require_present(kinds: list[str]) -> None:
+    """Fail fast when a locked split is absent. Only checks existence; it never opens a test file."""
+    for kind in kinds:
+        path = locked_path(kind)
+        if not path.is_file():
+            raise _missing(path)
+
+
 def load_locked(kind: str, gate: TestFileGate) -> list[dict]:
     path = locked_path(kind)
     gate.check(path)
@@ -105,14 +114,19 @@ def _json_default(value: object):
     raise TypeError(f"not JSON serializable: {type(value)!r}")
 
 
-def write_json(path: Path, payload: object) -> None:
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write then rename, so a session killed mid-write never leaves a truncated file behind."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def write_json(path: Path, payload: object) -> None:
     text = json.dumps(payload, indent=2, sort_keys=True, default=_json_default) + "\n"
-    path.write_text(text, encoding="utf-8")
+    _atomic_write_text(path, text)
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
+    text = "".join(json.dumps(row, sort_keys=True, default=_json_default) + "\n" for row in rows)
+    _atomic_write_text(path, text)

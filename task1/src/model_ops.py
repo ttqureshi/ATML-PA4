@@ -20,22 +20,31 @@ def load_qwen():
         raise RuntimeError(
             "Refusing to load Qwen weights because PA4_FORBID_DOWNLOAD=1. Smoke must not download weights."
         )
+    import time
+
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID,
-            torch_dtype=dtype,
-            attn_implementation="sdpa",
-        )
-    except (TypeError, ValueError, OSError):
-        model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=dtype)
+    last_error = None
+    # A transient Hub/network error must not kill a multi-hour stage: retry with backoff.
+    for attempt in range(4):
+        try:
+            try:
+                model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=dtype, attn_implementation="sdpa")
+            except (TypeError, ValueError):
+                model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=dtype)
+            tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+            break
+        except OSError as exc:
+            last_error = exc
+            print(f"load_qwen: attempt {attempt + 1} failed ({exc}); retrying", flush=True)
+            time.sleep(15 * (attempt + 1))
+    else:
+        raise RuntimeError(f"could not load {MODEL_ID}") from last_error
     model.eval()
     model.to(device)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     return model, tokenizer
 
 
@@ -50,8 +59,10 @@ def list_eligible(model) -> list[tuple[str, object]]:
     return found
 
 
-def parameter_census(model) -> dict:
-    eligible = list_eligible(model)
+def parameter_census(model, eligible: list[tuple[str, object]] | None = None) -> dict:
+    """Unique parameter counts. ``eligible`` overrides the compressed set (the smoke's two layers)."""
+    if eligible is None:
+        eligible = list_eligible(model)
     eligible_weights = {f"{name}.weight" for name, _module in eligible}
     seen: dict[int, str] = {}
     tied = []
@@ -220,8 +231,10 @@ def measure_reconstruction(model, modules, sequences, microbatch, reconstructed:
         def pre_hook(mod, args, name=name):
             hidden = args[0].detach().reshape(-1, args[0].shape[-1]).float()
             weight = mod.weight.detach().float()
-            candidate = torch.from_numpy(np.ascontiguousarray(reconstructed[name], dtype=np.float32))
-            candidate = candidate.to(device=weight.device)
+            # Upload as stored (FP16) and widen on the device: exact, half the transfer, and no
+            # per-batch float32 host copy of every projection.
+            candidate = torch.from_numpy(np.ascontiguousarray(reconstructed[name]))
+            candidate = candidate.to(device=weight.device).to(torch.float32)
             original = torch.nn.functional.linear(hidden, weight)
             approx = torch.nn.functional.linear(hidden, candidate)
             diff = original - approx

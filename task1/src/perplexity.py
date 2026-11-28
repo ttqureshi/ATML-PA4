@@ -87,7 +87,8 @@ def aggregate_perplexity(window_nll_sums: np.ndarray, window_counts: np.ndarray)
     return {
         "nll_sum": total_nll,
         "mean_nll": mean_nll,
-        "perplexity": float(math.exp(mean_nll)),
+        # A broken model can push mean NLL past exp's range; inf is the honest perplexity, not a crash.
+        "perplexity": float("inf") if mean_nll > 700.0 else float(math.exp(mean_nll)),
         "n_tokens": int(n_tokens),
         "n_windows": int(sums.shape[0]),
     }

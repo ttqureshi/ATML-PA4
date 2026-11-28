@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from shared.bootstrap import bootstrap_paired_mean_diff, bootstrap_pooled_nll_diff
+from task1.src import run_profile
 from task1.src.constants import ELIGIBLE_PROJECTIONS
 from task1.src.data import TestFileGate, load_locked, locked_path, write_json
 from task1.src.hellaswag import hellaswag_prompt
@@ -62,6 +63,15 @@ OPTIONAL_PAIRS = (
 )
 
 
+# Set by analyze(): every figure of a smoke run is stamped so it cannot pass for a result.
+_SMOKE = False
+
+
+def _stamp(fig) -> None:
+    if _SMOKE:
+        fig.suptitle("SMOKE RUN - not a result", color="red", fontsize=10)
+
+
 def _load_summary(output: Path, condition: str) -> dict:
     path = output / "conditions" / condition / "summary.json"
     if not path.is_file():
@@ -83,6 +93,7 @@ def _heatmap(records: list[dict], field: str, path: Path, title: str) -> None:
     ax.set_xlabel("layer")
     ax.set_title(title)
     fig.colorbar(image, ax=ax)
+    _stamp(fig)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=140)
@@ -124,9 +135,7 @@ def _quality_figure(summaries, path: Path, panels: list[tuple[str, str, str]]) -
             ("P2 Wanda", ["p2_s25", "p2_s50", "p2_s75"], "s"),
             ("P3 nonuniform", ["p3_s50", "p3_s75"], "D"),
         ):
-            if conditions[0] not in summaries or "achieved_sparsity" not in summaries[conditions[0]] and x_key == "sparsity":
-                continue
-            if x_key == "bytes":
+            if x_key == "bytes" or not all(condition in summaries for condition in conditions):
                 continue
             xs, ys = _series(summaries, conditions, x_key, metric)
             ax.plot(xs, ys, marker=marker, label=label)
@@ -154,7 +163,9 @@ def _quality_figure(summaries, path: Path, panels: list[tuple[str, str, str]]) -
                 )
         ax.set_title(title)
         ax.set_xlabel("achieved eligible sparsity" if x_key == "sparsity" else "packed bytes")
-        ax.legend(fontsize=8)
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(fontsize=8)
+    _stamp(fig)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=140)
@@ -273,19 +284,39 @@ def _deltas(summaries: dict[str, dict]) -> list[dict]:
     return rows
 
 
-def analyze(output: Path) -> None:
-    missing = [condition for condition in REQUIRED if not (output / "conditions" / condition / "summary.json").is_file()]
+CONDITION_FILES = ("summary.json", "hellaswag.jsonl", "window_nll_wikitext.npz", "window_nll_c4.npz")
+
+
+def _check_inputs(output: Path, conditions: list[str]) -> None:
+    """Every file analyze will read must exist before any figure is drawn."""
+    missing = [
+        f"{condition}/{filename}"
+        for condition in conditions
+        for filename in CONDITION_FILES
+        if not (output / "conditions" / condition / filename).is_file()
+    ]
     if missing:
-        raise SystemExit(
-            "analyze needs the finished condition summaries. Still missing: " + ", ".join(missing)
-        )
+        raise SystemExit("analyze needs the finished condition files. Still missing: " + ", ".join(missing))
+
+
+def analyze(output: Path) -> None:
+    global _SMOKE
+    profile = run_profile.current()
+    run_profile.check_output_dir(output, profile)
+    _check_inputs(output, list(REQUIRED))
     summaries = {condition: _load_summary(output, condition) for condition in REQUIRED}
     present = [condition for condition in OPTIONAL if (output / "conditions" / condition / "summary.json").is_file()]
     if len(present) != len(OPTIONAL):
         print("analyze: Q3m conditions missing, run quantize_q3m to include them: "
               + ", ".join(condition for condition in OPTIONAL if condition not in present), flush=True)
+    _check_inputs(output, present)
     for condition in present:
         summaries[condition] = _load_summary(output, condition)
+    flags = {condition: bool(summary.get("smoke", False)) for condition, summary in summaries.items()}
+    mixed = sorted(condition for condition, flag in flags.items() if flag != profile.smoke)
+    if mixed:
+        raise SystemExit(f"analyze (smoke={profile.smoke}) refuses conditions from the other profile: {', '.join(mixed)}")
+    _SMOKE = profile.smoke
     figures = output / "figures"
     _quality_figure(
         summaries,
@@ -332,8 +363,8 @@ def analyze(output: Path) -> None:
                  "Q3m: log10 calibration output MSE at INT2 (INT4 alphas)")
     pairs = list(PAIRS) + [pair for pair in OPTIONAL_PAIRS if pair[0] in summaries and pair[1] in summaries]
     # Keep the human label as the key rather than only the condition ids.
-    labeled = {label: _paired(output, left, right) for left, right, label in pairs}
+    labeled = {label: dict(_paired(output, left, right), smoke=_SMOKE) for left, right, label in pairs}
     write_json(output / "bootstrap.json", labeled)
-    write_json(output / "comparison.json", _deltas(summaries))
+    write_json(output / "comparison.json", [dict(row, smoke=_SMOKE) for row in _deltas(summaries)])
     write_json(output / "qualitative_hellaswag.json", _qualitative(output, summaries))
     print("analyze: wrote figures, bootstrap.json, comparison.json, qualitative_hellaswag.json", flush=True)
